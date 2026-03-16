@@ -19,7 +19,8 @@ export type Tool =
   | "attract"
   | "select"
   | "seesaw"
-  | "rocket";
+  | "rocket"
+  | "scale";
 
 export const ERASE_RADIUS_PX = 24; // CSS pixels
 export const GRAB_RADIUS_PX = 30; // CSS pixels — touch grab hit area
@@ -46,6 +47,9 @@ export class InputManager {
 
   // Rope tool state
   ropePending: { body: planck.Body | null; x: number; y: number } | null = null;
+
+  // Scale tool state
+  scaleDrag: { body: planck.Body; startScreenY: number; currentScale: number } | null = null;
 
   // Multi-placement mode
   multiPlace = false;
@@ -173,6 +177,9 @@ export class InputManager {
       case "select":
         this.handleSelect(world.x, world.y, e.clientX, e.clientY);
         break;
+      case "scale":
+        this.startScale(world.x, world.y, e.clientY);
+        break;
     }
     this.startMultiPlace();
   }
@@ -208,6 +215,11 @@ export class InputManager {
       const world = this.game.camera.toWorld(e.clientX, e.clientY, this.game.canvas);
       this.platformDraw.end = { x: world.x, y: world.y };
     }
+
+    if (this.scaleDrag) {
+      const deltaY = this.scaleDrag.startScreenY - e.clientY;
+      this.scaleDrag.currentScale = Math.max(0.2, Math.min(5, 2 ** (deltaY / 150)));
+    }
   }
 
   private onMouseUp(_e: MouseEvent) {
@@ -219,6 +231,7 @@ export class InputManager {
     }
     this.grabbedStatic = null;
     this.finishPlatformDraw();
+    this.finishScale();
   }
 
   private onWheel(e: WheelEvent) {
@@ -286,6 +299,11 @@ export class InputManager {
         this.toolCursor = { x: t.clientX, y: t.clientY };
         const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
         this.startGrab(world.x, world.y, GRAB_RADIUS_PX);
+      } else if (this.tool === "scale") {
+        this.toolCursor = { x: t.clientX, y: t.clientY };
+        const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
+        this.startScale(world.x, world.y, t.clientY);
+        this.touchToolFired = true;
       } else if (this.tool === "platform" || this.tool === "conveyor") {
         const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
         this.platformDraw = { start: { x: world.x, y: world.y }, end: { x: world.x, y: world.y } };
@@ -309,6 +327,7 @@ export class InputManager {
         this.mouseJoint = null;
       }
       this.grabbedStatic = null;
+      this.scaleDrag = null;
       this.stopMultiPlace();
       this.platformDraw = null;
 
@@ -344,6 +363,10 @@ export class InputManager {
         const tdy = -(t.y - prev.y) / this.game.camera.zoom;
         const pos = this.grabbedStatic.getPosition();
         this.grabbedStatic.setPosition(planck.Vec2(pos.x + tdx, pos.y + tdy));
+      } else if (this.scaleDrag) {
+        this.toolCursor = { x: t.x, y: t.y };
+        const deltaY = this.scaleDrag.startScreenY - t.y;
+        this.scaleDrag.currentScale = Math.max(0.2, Math.min(5, 2 ** (deltaY / 150)));
       } else if (this.tool === "erase") {
         this.toolCursor = { x: t.x, y: t.y };
         this.eraseAtScreen(t.x, t.y);
@@ -423,9 +446,10 @@ export class InputManager {
       }
     }
 
-    // Finish platform draw / stop multi-place on touch end
+    // Finish platform draw / stop multi-place / apply scale on touch end
     if (e.touches.length === 0) {
       this.finishPlatformDraw();
+      this.finishScale();
       this.stopMultiPlace();
     }
 
@@ -482,6 +506,21 @@ export class InputManager {
       }
     }
     this.platformDraw = null;
+  }
+
+  private startScale(wx: number, wy: number, screenY: number) {
+    const body = this.findBodyAt(wx, wy, 20);
+    if (body) {
+      this.scaleDrag = { body, startScreenY: screenY, currentScale: 1 };
+    }
+  }
+
+  private finishScale() {
+    if (!this.scaleDrag) return;
+    const { body, currentScale } = this.scaleDrag;
+    this.scaleDrag = null;
+    if (Math.abs(currentScale - 1) < 0.05) return;
+    this.game.scaleBody(body, currentScale);
   }
 
   /** Find the nearest body at world coords */
@@ -784,6 +823,7 @@ export class InputManager {
     this.attachPending = null;
     this.selectedBody = null;
     this.ropePending = null;
+    this.scaleDrag = null;
     this.cancelAttract();
     this.onToolChange?.(tool);
   }

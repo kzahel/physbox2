@@ -148,6 +148,8 @@ export class Renderer {
         this.drawToolCursor(pos, 10, "rgba(50, 255, 150, 0.6)", "rgba(50, 255, 150, 0.05)");
       } else if (tool === "ropetool") {
         this.drawToolCursor(pos, 10, "rgba(180, 160, 120, 0.6)", "rgba(180, 160, 120, 0.05)");
+      } else if (tool === "scale" && !this.inputManager?.scaleDrag) {
+        this.drawToolCursor(pos, 14, "rgba(180, 120, 255, 0.6)", "rgba(180, 120, 255, 0.05)");
       }
     }
 
@@ -193,6 +195,26 @@ export class Renderer {
       const bpos = body.getPosition();
       const sp = camera.toScreen(bpos.x, bpos.y, this.canvas);
       this.drawToolCursor(sp, 16, "rgba(255, 200, 50, 0.9)", "rgba(255, 200, 50, 0.15)");
+    }
+
+    // Draw scale preview
+    if (this.inputManager?.scaleDrag) {
+      const sd = this.inputManager.scaleDrag;
+      const bpos = sd.body.getPosition();
+      const sp = camera.toScreen(bpos.x, bpos.y, this.canvas);
+      const ringSize = 20 * sd.currentScale;
+      this.drawToolCursor(sp, ringSize, "rgba(180, 120, 255, 0.8)", "rgba(180, 120, 255, 0.1)");
+      // Scale factor label
+      const ctx = this.ctx;
+      ctx.save();
+      const dpr = window.devicePixelRatio || 1;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 13px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${sd.currentScale.toFixed(1)}x`, sp.x, sp.y - ringSize - 14);
+      ctx.restore();
     }
 
     // Draw select tool UI

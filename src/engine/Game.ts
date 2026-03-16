@@ -428,6 +428,89 @@ export class Game {
     return body;
   }
 
+  scaleBody(body: planck.Body, scale: number): planck.Body {
+    const pos = body.getPosition();
+    const angle = body.getAngle();
+    const vel = body.getLinearVelocity();
+    const angVel = body.getAngularVelocity();
+    const type = body.getType();
+    const userData = body.getUserData();
+    const linearDamping = body.getLinearDamping();
+    const angularDamping = body.getAngularDamping();
+
+    // Collect fixture data
+    const fixtures: {
+      density: number;
+      friction: number;
+      restitution: number;
+      isSensor: boolean;
+      userData: unknown;
+      shapeType: string;
+      // Circle
+      radius?: number;
+      center?: { x: number; y: number };
+      // Polygon
+      verts?: { x: number; y: number }[];
+    }[] = [];
+
+    for (let f = body.getFixtureList(); f; f = f.getNext()) {
+      const shape = f.getShape();
+      const fd = {
+        density: f.getDensity(),
+        friction: f.getFriction(),
+        restitution: f.getRestitution(),
+        isSensor: f.isSensor(),
+        userData: f.getUserData(),
+        shapeType: shape.getType(),
+      } as (typeof fixtures)[number];
+
+      if (shape.getType() === "circle") {
+        const circle = shape as planck.CircleShape;
+        const c = circle.getCenter();
+        fd.radius = circle.getRadius() * scale;
+        fd.center = { x: c.x * scale, y: c.y * scale };
+      } else if (shape.getType() === "polygon") {
+        const poly = shape as planck.PolygonShape;
+        fd.verts = poly.m_vertices.map((v) => ({ x: v.x * scale, y: v.y * scale }));
+      } else {
+        continue;
+      }
+      fixtures.push(fd);
+    }
+
+    this.world.destroyBody(body);
+
+    const newBody = this.world.createBody({
+      type,
+      position: planck.Vec2(pos.x, pos.y),
+      angle,
+      linearDamping,
+      angularDamping,
+    });
+    newBody.setLinearVelocity(planck.Vec2(vel.x, vel.y));
+    newBody.setAngularVelocity(angVel);
+    newBody.setUserData(userData);
+
+    for (const fd of fixtures) {
+      let shape: planck.Shape;
+      if (fd.shapeType === "circle") {
+        shape = planck.Circle(planck.Vec2(fd.center!.x, fd.center!.y), fd.radius!);
+      } else {
+        shape = planck.Polygon(fd.verts!.map((v) => planck.Vec2(v.x, v.y)));
+      }
+      const fix = newBody.createFixture({
+        shape,
+        density: fd.density,
+        friction: fd.friction,
+        restitution: fd.restitution,
+        isSensor: fd.isSensor,
+      });
+      if (fd.userData) fix.setUserData(fd.userData);
+    }
+
+    return newBody;
+  }
+
   setGravity(g: number) {
     this.gravity = g;
     this.world.setGravity(planck.Vec2(0, g));
