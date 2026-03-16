@@ -1,6 +1,6 @@
 import * as planck from "planck";
 import type { InputManager } from "../interaction/InputManager";
-import { playBounce, playExplosion, unlockAudio } from "./Audio";
+import { playBounce, playExplosion, playWoodHit, unlockAudio } from "./Audio";
 import { Camera } from "./Camera";
 import { Renderer } from "./Renderer";
 
@@ -50,7 +50,7 @@ export class Game {
     unlockAudio();
 
     this.buildDefaultScene();
-    this.bindBounceSound();
+    this.bindCollisionSounds();
     this.bindBounciness();
   }
 
@@ -60,22 +60,25 @@ export class Game {
     });
   }
 
-  private bindBounceSound() {
-    const MIN_SPEED = 2; // ignore gentle resting contacts
-    const MAX_SPEED = 15; // clamp for intensity calc
+  private bindCollisionSounds() {
+    const MIN_IMPULSE = 2;
+    const MAX_IMPULSE = 15;
 
     this.world.on("post-solve", (contact, impulse) => {
       const ni = impulse.normalImpulses[0];
-      if (ni < MIN_SPEED) return;
+      if (ni < MIN_IMPULSE) return;
 
-      // Check if either fixture is a circle (ball)
       const fA = contact.getFixtureA();
       const fB = contact.getFixtureB();
-      const isCircle = fA.getShape().getType() === "circle" || fB.getShape().getType() === "circle";
-      if (!isCircle) return;
+      const tA = fA.getShape().getType();
+      const tB = fB.getShape().getType();
+      const intensity = Math.min(1, (ni - MIN_IMPULSE) / (MAX_IMPULSE - MIN_IMPULSE));
 
-      const intensity = Math.min(1, (ni - MIN_SPEED) / (MAX_SPEED - MIN_SPEED));
-      playBounce(intensity);
+      if (tA === "circle" || tB === "circle") {
+        playBounce(intensity);
+      } else if (tA === "polygon" || tB === "polygon") {
+        playWoodHit(intensity);
+      }
     });
   }
 

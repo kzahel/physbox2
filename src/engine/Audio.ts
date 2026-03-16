@@ -54,6 +54,53 @@ export function playBounce(intensity: number) {
   };
 }
 
+/** Woody clack for box/polygon collisions — rate-limited */
+let lastWoodTime = 0;
+const WOOD_COOLDOWN = 0.05;
+const MAX_CONCURRENT_WOOD = 3;
+let activeWood = 0;
+
+export function playWoodHit(intensity: number) {
+  const ac = getCtx();
+  if (ac.state === "suspended") return;
+  const now = ac.currentTime;
+
+  if (now - lastWoodTime < WOOD_COOLDOWN) return;
+  if (activeWood >= MAX_CONCURRENT_WOOD) return;
+  lastWoodTime = now;
+  activeWood++;
+
+  const vol = 0.015 + intensity * intensity * 0.25;
+  const dur = 0.02 + intensity * 0.05;
+
+  // Short noise burst through a bandpass for woody character
+  const len = Math.ceil(ac.sampleRate * dur);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    data[i] = Math.random() * 2 - 1;
+  }
+
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+
+  const bp = ac.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = 800 + (1 - intensity) * 600; // higher pitch for lighter taps
+  bp.Q.value = 2;
+
+  const gain = ac.createGain();
+  gain.gain.setValueAtTime(vol, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+  src.connect(bp).connect(gain).connect(ac.destination);
+  src.start(now);
+  src.stop(now + dur);
+  src.onended = () => {
+    activeWood--;
+  };
+}
+
 /** Synthesized explosion: filtered noise burst + low-frequency boom */
 export function playExplosion(volume = 0.5) {
   const ac = getCtx();
