@@ -57,20 +57,18 @@ export class TiltGravity {
   private onOrientation(e: DeviceOrientationEvent) {
     if (e.gamma == null || e.beta == null) return;
 
-    // gamma: left/right tilt (-90 to 90)
-    // beta: front/back tilt (-180 to 180), ~90 when upright
+    // W3C DeviceOrientation uses Z-X'-Y'' (alpha-beta-gamma) intrinsic rotations.
+    // Projecting world gravity (0,0,-g) into the device frame gives:
+    //   device_x =  g * cos(beta) * sin(gamma)
+    //   device_y = -g * sin(beta)
+    // beta ≈ 90° when upright portrait → gy ≈ -g (down)
+    // gamma = left/right tilt; only produces lateral gravity when phone is tilted forward
     const g = this.magnitude;
-    const gammaRad = (e.gamma * Math.PI) / 180;
     const betaRad = (e.beta * Math.PI) / 180;
+    const gammaRad = (e.gamma * Math.PI) / 180;
 
-    // Project gravity onto screen plane assuming portrait orientation
-    // gx: sin(gamma) gives left-right component
-    // gy: -cos(gamma) * cos(beta-90) gives the "down" component on screen
-    // When upright (beta=90): gy = -g*cos(gamma) (straight down at gamma=0)
-    // Small tilts produce proportional gravity shifts
-    const gx = g * Math.sin(gammaRad);
-    const betaFromUpright = betaRad - Math.PI / 2;
-    const gy = -g * Math.cos(gammaRad) * Math.cos(betaFromUpright);
+    const gx = g * Math.cos(betaRad) * Math.sin(gammaRad);
+    const gy = -g * Math.sin(betaRad);
 
     this.game.setGravityXY(gx, gy);
   }
