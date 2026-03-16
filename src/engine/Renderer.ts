@@ -108,7 +108,17 @@ export class Renderer {
         this.drawToolCursor(pos, ERASE_RADIUS_PX, "rgba(255, 80, 80, 0.7)", "rgba(255, 80, 80, 0.1)");
       } else if (tool === "grab") {
         this.drawToolCursor(pos, GRAB_RADIUS_PX, "rgba(100, 200, 255, 0.5)", "rgba(100, 200, 255, 0.05)");
+      } else if (tool === "attach") {
+        this.drawToolCursor(pos, 10, "rgba(255, 200, 50, 0.6)", "rgba(255, 200, 50, 0.05)");
       }
+    }
+
+    // Draw attach pending highlight
+    if (this.inputManager?.attachPending) {
+      const body = this.inputManager.attachPending.body;
+      const bpos = body.getPosition();
+      const sp = camera.toScreen(bpos.x, bpos.y, this.canvas);
+      this.drawToolCursor(sp, 16, "rgba(255, 200, 50, 0.9)", "rgba(255, 200, 50, 0.15)");
     }
   }
 

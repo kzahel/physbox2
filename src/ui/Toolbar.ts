@@ -7,6 +7,7 @@ const TOOLS: { id: Tool; label: string }[] = [
   { id: "platform", label: "Platform" },
   { id: "rope", label: "Rope" },
   { id: "erase", label: "Erase" },
+  { id: "attach", label: "Attach" },
 ];
 
 export class Toolbar {

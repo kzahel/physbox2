@@ -1,7 +1,7 @@
 import * as planck from "planck";
 import type { Game } from "../engine/Game";
 
-export type Tool = "box" | "ball" | "platform" | "rope" | "grab" | "erase";
+export type Tool = "box" | "ball" | "platform" | "rope" | "grab" | "erase" | "attach";
 
 export const ERASE_RADIUS_PX = 24; // CSS pixels
 export const GRAB_RADIUS_PX = 30; // CSS pixels — touch grab hit area
@@ -12,6 +12,9 @@ export class InputManager {
   private groundBody: planck.Body;
   private isPanning = false;
   private lastMouse = { x: 0, y: 0 };
+
+  // Attach tool state
+  attachPending: { body: planck.Body; world: { x: number; y: number } } | null = null;
 
   // Tool cursor position (screen coords, null when not active)
   toolCursor: { x: number; y: number } | null = null;
@@ -97,6 +100,9 @@ export class InputManager {
         break;
       case "erase":
         this.eraseAtScreen(e.clientX, e.clientY);
+        break;
+      case "attach":
+        this.handleAttach(world.x, world.y);
         break;
     }
   }
@@ -276,6 +282,10 @@ export class InputManager {
         case "erase":
           this.eraseAtScreen(t.x, t.y);
           break;
+        case "attach": {
+          this.handleAttach(world.x, world.y);
+          break;
+        }
       }
     }
 
@@ -312,8 +322,56 @@ export class InputManager {
     for (const b of toRemove) this.game.world.destroyBody(b);
   }
 
+  /** Find the nearest body at world coords */
+  private findBodyAt(wx: number, wy: number, radiusPx = 10): planck.Body | null {
+    const radius = radiusPx / this.game.camera.zoom;
+    const point = planck.Vec2(wx, wy);
+    let target: planck.Body | null = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+
+    this.game.world.queryAABB(
+      planck.AABB(planck.Vec2(wx - radius, wy - radius), planck.Vec2(wx + radius, wy + radius)),
+      (fixture) => {
+        const body = fixture.getBody();
+        if (fixture.testPoint(point)) {
+          target = body;
+          bestDist = 0;
+          return false;
+        }
+        const d = planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), point));
+        if (d < bestDist) {
+          bestDist = d;
+          target = body;
+        }
+        return true;
+      },
+    );
+
+    return target;
+  }
+
+  /** Handle attach tool click: first click selects, second click welds */
+  private handleAttach(wx: number, wy: number) {
+    const body = this.findBodyAt(wx, wy);
+    if (!body) return;
+
+    if (!this.attachPending) {
+      // First click: select body
+      this.attachPending = { body, world: { x: wx, y: wy } };
+    } else {
+      // Second click: attach to first body
+      if (body !== this.attachPending.body) {
+        const midX = (this.attachPending.world.x + wx) / 2;
+        const midY = (this.attachPending.world.y + wy) / 2;
+        this.game.world.createJoint(planck.WeldJoint({}, this.attachPending.body, body, planck.Vec2(midX, midY)));
+      }
+      this.attachPending = null;
+    }
+  }
+
   setTool(tool: Tool) {
     this.tool = tool;
+    this.attachPending = null;
     this.onToolChange?.(tool);
   }
 }
