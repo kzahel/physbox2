@@ -773,7 +773,17 @@ export class InputManager {
     );
   }
 
-  private readonly CREATION_TOOLS = new Set<Tool>(["box", "ball", "rope", "car", "springball", "dynamite"]);
+  private readonly CREATION_TOOLS = new Set<Tool>([
+    "box",
+    "ball",
+    "rope",
+    "car",
+    "springball",
+    "dynamite",
+    "rocket",
+    "seesaw",
+    "launcher",
+  ]);
 
   private startMultiPlace() {
     if (!this.multiPlace || !this.CREATION_TOOLS.has(this.tool)) return;
@@ -810,6 +820,15 @@ export class InputManager {
         break;
       case "dynamite":
         this.game.addDynamite(wx, wy);
+        break;
+      case "rocket":
+        this.game.addRocket(wx, wy);
+        break;
+      case "seesaw":
+        this.game.addSeesaw(wx, wy);
+        break;
+      case "launcher":
+        this.game.addLauncher(wx, wy);
         break;
     }
   }
