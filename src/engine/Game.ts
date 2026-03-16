@@ -161,11 +161,17 @@ export class Game {
     const dist = planck.Vec2.lengthOf(planck.Vec2.sub(anchorA, anchorB));
     const localA = a.getLocalPoint(anchorA);
     const localB = b.getLocalPoint(anchorB);
-    const joint = planck.DistanceJoint({
-      frequencyHz: 3,
-      dampingRatio: 0.3,
-      length: dist,
-    }, a, b, anchorA, anchorB);
+    const joint = planck.DistanceJoint(
+      {
+        frequencyHz: 3,
+        dampingRatio: 0.3,
+        length: dist,
+      },
+      a,
+      b,
+      anchorA,
+      anchorB,
+    );
     (joint as any).m_localAnchorA = localA;
     (joint as any).m_localAnchorB = localB;
     this.world.createJoint(joint);
