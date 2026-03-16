@@ -10,4 +10,18 @@ const input = new InputManager(game);
 new Toolbar(document.getElementById("toolbar")!, input);
 new SettingsPane(document.getElementById("settings")!, game);
 
+// Mobile hamburger sidebar toggle
+const hamburger = document.getElementById("hamburger")!;
+const settings = document.getElementById("settings")!;
+const overlay = document.getElementById("sidebar-overlay")!;
+
+function toggleSidebar(open?: boolean) {
+  const isOpen = open ?? !settings.classList.contains("open");
+  settings.classList.toggle("open", isOpen);
+  overlay.classList.toggle("open", isOpen);
+}
+
+hamburger.addEventListener("click", () => toggleSidebar());
+overlay.addEventListener("click", () => toggleSidebar(false));
+
 game.start();
