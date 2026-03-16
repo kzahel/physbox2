@@ -1,7 +1,7 @@
 import * as planck from "planck";
 import type { Game } from "../engine/Game";
 
-export type Tool = "box" | "ball" | "platform" | "rope" | "grab" | "erase" | "attach";
+export type Tool = "box" | "ball" | "platform" | "rope" | "grab" | "erase" | "attach" | "detach" | "attract";
 
 export const ERASE_RADIUS_PX = 24; // CSS pixels
 export const GRAB_RADIUS_PX = 30; // CSS pixels — touch grab hit area
@@ -15,6 +15,9 @@ export class InputManager {
 
   // Attach tool state
   attachPending: { body: planck.Body; world: { x: number; y: number } } | null = null;
+
+  // Attract tool state: pulling two bodies together before welding
+  attracting: { bodyA: planck.Body; bodyB: planck.Body; joint: planck.Joint } | null = null;
 
   // Tool cursor position (screen coords, null when not active)
   toolCursor: { x: number; y: number } | null = null;
@@ -33,6 +36,7 @@ export class InputManager {
     this.game = game;
     this.groundBody = game.world.createBody({ type: "static" });
     this.bind();
+    this.bindContactListener();
   }
 
   private bind() {
@@ -103,6 +107,12 @@ export class InputManager {
         break;
       case "attach":
         this.handleAttach(world.x, world.y);
+        break;
+      case "detach":
+        this.handleDetach(world.x, world.y);
+        break;
+      case "attract":
+        this.handleAttract(world.x, world.y);
         break;
     }
   }
@@ -286,6 +296,12 @@ export class InputManager {
           this.handleAttach(world.x, world.y);
           break;
         }
+        case "detach":
+          this.handleDetach(world.x, world.y);
+          break;
+        case "attract":
+          this.handleAttract(world.x, world.y);
+          break;
       }
     }
 
@@ -369,9 +385,86 @@ export class InputManager {
     }
   }
 
+  /** Remove all weld joints from a clicked body */
+  private handleDetach(wx: number, wy: number) {
+    const body = this.findBodyAt(wx, wy);
+    if (!body) return;
+
+    const toRemove: planck.Joint[] = [];
+    for (let j = this.game.world.getJointList(); j; j = j.getNext()) {
+      if (j.getType() === "weld-joint" && (j.getBodyA() === body || j.getBodyB() === body)) {
+        toRemove.push(j);
+      }
+    }
+    for (const j of toRemove) this.game.world.destroyJoint(j);
+  }
+
+  /** Handle attract tool: select two bodies, pull them together with a spring, weld on contact */
+  private handleAttract(wx: number, wy: number) {
+    // If already attracting, cancel on any click
+    if (this.attracting) {
+      this.cancelAttract();
+      return;
+    }
+
+    const body = this.findBodyAt(wx, wy);
+    if (!body) return;
+
+    if (!this.attachPending) {
+      this.attachPending = { body, world: { x: wx, y: wy } };
+    } else {
+      if (body !== this.attachPending.body) {
+        const bodyA = this.attachPending.body;
+        const bodyB = body;
+        // Create a DistanceJoint with length 0 to pull them together
+        const joint = this.game.world.createJoint(
+          planck.DistanceJoint(
+            { frequencyHz: 3, dampingRatio: 0.5, length: 0 },
+            bodyA,
+            bodyB,
+            bodyA.getPosition(),
+            bodyB.getPosition(),
+          ),
+        )!;
+        this.attracting = { bodyA, bodyB, joint };
+      }
+      this.attachPending = null;
+    }
+  }
+
+  private cancelAttract() {
+    if (this.attracting) {
+      this.game.world.destroyJoint(this.attracting.joint);
+      this.attracting = null;
+    }
+  }
+
+  private bindContactListener() {
+    this.game.world.on("begin-contact", (contact) => {
+      if (!this.attracting) return;
+      const { bodyA, bodyB, joint } = this.attracting;
+      const cA = contact.getFixtureA().getBody();
+      const cB = contact.getFixtureB().getBody();
+      const match = (cA === bodyA && cB === bodyB) || (cA === bodyB && cB === bodyA);
+      if (!match) return;
+
+      // Weld at the contact point
+      const manifold = contact.getWorldManifold(null);
+      const weldPoint = manifold?.points[0] ?? bodyA.getPosition();
+      // Defer joint creation to after physics step
+      setTimeout(() => {
+        if (!this.attracting) return;
+        this.game.world.destroyJoint(joint);
+        this.game.world.createJoint(planck.WeldJoint({}, bodyA, bodyB, weldPoint));
+        this.attracting = null;
+      }, 0);
+    });
+  }
+
   setTool(tool: Tool) {
     this.tool = tool;
     this.attachPending = null;
+    this.cancelAttract();
     this.onToolChange?.(tool);
   }
 }

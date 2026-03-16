@@ -8,6 +8,8 @@ const TOOLS: { id: Tool; label: string }[] = [
   { id: "rope", label: "Rope" },
   { id: "erase", label: "Erase" },
   { id: "attach", label: "Attach" },
+  { id: "detach", label: "Detach" },
+  { id: "attract", label: "Attach+" },
 ];
 
 export class Toolbar {

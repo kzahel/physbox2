@@ -110,6 +110,10 @@ export class Renderer {
         this.drawToolCursor(pos, GRAB_RADIUS_PX, "rgba(100, 200, 255, 0.5)", "rgba(100, 200, 255, 0.05)");
       } else if (tool === "attach") {
         this.drawToolCursor(pos, 10, "rgba(255, 200, 50, 0.6)", "rgba(255, 200, 50, 0.05)");
+      } else if (tool === "detach") {
+        this.drawToolCursor(pos, 10, "rgba(255, 100, 50, 0.6)", "rgba(255, 100, 50, 0.05)");
+      } else if (tool === "attract") {
+        this.drawToolCursor(pos, 10, "rgba(50, 255, 150, 0.6)", "rgba(50, 255, 150, 0.05)");
       }
     }
 
