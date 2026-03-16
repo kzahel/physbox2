@@ -12,6 +12,7 @@ export class SettingsPane {
       <div class="section-title">Simulation</div>
       <label>Gravity <input type="range" id="s-gravity" min="-30" max="10" step="0.5" value="${game.gravity}"></label>
       <label>Speed <input type="range" id="s-speed" min="0" max="3" step="0.1" value="${game.timeScale}"></label>
+      <label>Bounce <input type="range" id="s-bounce" min="0" max="1" step="0.05" value="${game.bounciness}"></label>
       <label>Solver Iters <input type="range" id="s-iters" min="1" max="20" step="1" value="${game.positionIterations}"></label>
 
       <div class="section-title">Actions</div>
@@ -37,6 +38,9 @@ export class SettingsPane {
     speedSlider.addEventListener("input", () => {
       game.timeScale = parseFloat(speedSlider.value);
     });
+
+    const bounceSlider = container.querySelector<HTMLInputElement>("#s-bounce")!;
+    bounceSlider.addEventListener("input", () => game.setBounciness(parseFloat(bounceSlider.value)));
 
     const itersSlider = container.querySelector<HTMLInputElement>("#s-iters")!;
     itersSlider.addEventListener("input", () => {

@@ -14,6 +14,7 @@ export class Game {
   canvas: HTMLCanvasElement;
 
   gravity = -10;
+  bounciness = 0.5;
   timeScale = 1;
   velocityIterations = 8;
   positionIterations = 3;
@@ -50,6 +51,13 @@ export class Game {
 
     this.buildDefaultScene();
     this.bindBounceSound();
+    this.bindBounciness();
+  }
+
+  private bindBounciness() {
+    this.world.on("pre-solve", (contact) => {
+      contact.setRestitution(this.bounciness);
+    });
   }
 
   private bindBounceSound() {
@@ -603,6 +611,10 @@ export class Game {
     }
 
     return newBody;
+  }
+
+  setBounciness(value: number) {
+    this.bounciness = value;
   }
 
   setGravity(g: number) {
