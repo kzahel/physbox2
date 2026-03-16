@@ -286,12 +286,6 @@ export class InputManager {
         this.toolCursor = { x: t.clientX, y: t.clientY };
         this.eraseAtScreen(t.clientX, t.clientY);
         this.touchToolFired = true;
-      } else if (this.multiPlace && this.CREATION_TOOLS.has(this.tool)) {
-        const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
-        this.placeCreationTool(world.x, world.y);
-        this.lastMouse = { x: t.clientX, y: t.clientY };
-        this.startMultiPlace();
-        this.touchToolFired = true;
       }
     }
   }
@@ -307,6 +301,8 @@ export class InputManager {
         this.mouseJoint = null;
       }
       this.grabbedStatic = null;
+      this.stopMultiPlace();
+      this.platformDraw = null;
 
       // Two-finger pan + pinch zoom
       const prevA = this.lastTouches[0];
@@ -349,6 +345,14 @@ export class InputManager {
         this.platformDraw.end = { x: world.x, y: world.y };
       } else if (this.multiPlaceInterval) {
         this.lastMouse = { x: t.x, y: t.y };
+      } else if (this.multiPlace && this.CREATION_TOOLS.has(this.tool)) {
+        // Start multi-place on first single-finger move (not touchstart)
+        // to avoid placing when user intends to two-finger pan
+        const world = this.game.camera.toWorld(t.x, t.y, this.game.canvas);
+        this.placeCreationTool(world.x, world.y);
+        this.lastMouse = { x: t.x, y: t.y };
+        this.startMultiPlace();
+        this.touchToolFired = true;
       }
     }
 
