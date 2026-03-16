@@ -325,19 +325,26 @@ export class Game {
   addDynamite(x: number, y: number, fuseTime = 3) {
     const body = this.world.createBody({ type: "dynamic", position: planck.Vec2(x, y) });
     body.createFixture({ shape: planck.Box(0.25, 0.4), density: 2, friction: 0.5 });
-    body.setUserData({ fill: "rgba(255,50,30,0.9)", label: "dynamite" });
+    body.setUserData({
+      fill: "rgba(255,50,30,0.9)",
+      label: "dynamite",
+      fuseStart: performance.now(),
+      fuseDuration: fuseTime,
+    });
 
     const world = this.world;
+    const renderer = this.renderer;
     const blastRadius = 8;
     const blastForce = 30;
 
     setTimeout(() => {
-      // Check body still exists
       if (!body.isActive()) return;
       const pos = body.getPosition();
       const center = planck.Vec2(pos.x, pos.y);
 
-      // Destroy the dynamite
+      // Explosion particles
+      renderer.spawnExplosion(center.x, center.y);
+
       world.destroyBody(body);
 
       // Apply radial impulse to nearby dynamic bodies
