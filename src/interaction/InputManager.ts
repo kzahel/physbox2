@@ -1,7 +1,18 @@
 import * as planck from "planck";
 import type { Game } from "../engine/Game";
 
-export type Tool = "box" | "ball" | "platform" | "rope" | "grab" | "erase" | "attach" | "detach" | "attract" | "select";
+export type Tool =
+  | "box"
+  | "ball"
+  | "platform"
+  | "rope"
+  | "car"
+  | "grab"
+  | "erase"
+  | "attach"
+  | "detach"
+  | "attract"
+  | "select";
 
 export const ERASE_RADIUS_PX = 24; // CSS pixels
 export const GRAB_RADIUS_PX = 30; // CSS pixels — touch grab hit area
@@ -107,6 +118,9 @@ export class InputManager {
         break;
       case "rope":
         this.game.addChainRope(world.x, world.y, 8);
+        break;
+      case "car":
+        this.game.addCar(world.x, world.y);
         break;
       case "erase":
         this.eraseAtScreen(e.clientX, e.clientY);
@@ -307,6 +321,9 @@ export class InputManager {
           break;
         case "rope":
           this.game.addChainRope(world.x, world.y, 8);
+          break;
+        case "car":
+          this.game.addCar(world.x, world.y);
           break;
         case "erase":
           this.eraseAtScreen(t.x, t.y);

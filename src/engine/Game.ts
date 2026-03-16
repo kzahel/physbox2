@@ -111,6 +111,48 @@ export class Game {
     return prev; // return last link for attaching things
   }
 
+  addCar(x: number, y: number) {
+    // Chassis
+    const chassis = this.world.createBody({ type: "dynamic", position: planck.Vec2(x, y) });
+    chassis.createFixture({ shape: planck.Box(2, 0.5), density: 1, friction: 0.3 });
+    chassis.setUserData({ fill: "rgba(220,80,60,0.8)" });
+
+    // Roof
+    chassis.createFixture({
+      shape: planck.Polygon([
+        planck.Vec2(-1.2, 0.5),
+        planck.Vec2(-0.6, 1.1),
+        planck.Vec2(1.0, 1.1),
+        planck.Vec2(1.4, 0.5),
+      ]),
+      density: 0.5,
+    });
+
+    const wheelRadius = 0.5;
+    const suspAxis = planck.Vec2(0, 1);
+    const wheelOpts = {
+      enableMotor: true,
+      motorSpeed: 0,
+      maxMotorTorque: 30,
+      frequencyHz: 4,
+      dampingRatio: 0.7,
+    };
+
+    // Rear wheel
+    const rearWheel = this.world.createBody({ type: "dynamic", position: planck.Vec2(x - 1.2, y - 0.7) });
+    rearWheel.createFixture({ shape: planck.Circle(wheelRadius), density: 1, friction: 0.9 });
+    rearWheel.setUserData({ fill: "rgba(50,50,50,0.9)" });
+    this.world.createJoint(planck.WheelJoint(wheelOpts, chassis, rearWheel, rearWheel.getPosition(), suspAxis));
+
+    // Front wheel
+    const frontWheel = this.world.createBody({ type: "dynamic", position: planck.Vec2(x + 1.2, y - 0.7) });
+    frontWheel.createFixture({ shape: planck.Circle(wheelRadius), density: 1, friction: 0.9 });
+    frontWheel.setUserData({ fill: "rgba(50,50,50,0.9)" });
+    this.world.createJoint(planck.WheelJoint(wheelOpts, chassis, frontWheel, frontWheel.getPosition(), suspAxis));
+
+    return chassis;
+  }
+
   setGravity(g: number) {
     this.gravity = g;
     this.world.setGravity(planck.Vec2(0, g));
