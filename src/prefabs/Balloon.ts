@@ -16,10 +16,10 @@ export function createBalloon(world: planck.World, x: number, y: number): planck
 
   body.createFixture({
     shape: planck.Circle(planck.Vec2(0, -radius - 0.15), 0.06),
-    density: 0.5,
+    density: 0.2,
   });
 
-  const lift = 12 + r() * 8;
+  const lift = 25 + r() * 10;
   body.setUserData({ fill: color, label: "balloon", lift });
   return body;
 }
