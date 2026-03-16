@@ -250,13 +250,15 @@ export class Game {
   }
 
   reset() {
-    const allBodies: planck.Body[] = [];
-    for (let b = this.world.getBodyList(); b; b = b.getNext()) {
-      allBodies.push(b);
-    }
-    for (const b of allBodies) this.world.destroyBody(b);
+    // Create a fresh world to clear all event listeners (cannon contacts, etc.)
+    this.world = new planck.World({ gravity: planck.Vec2(0, this.gravity) });
+    this.bindBounciness();
+    this.bindCollisionSounds();
     this.ragdolls.length = 0;
+    this.followBody = null;
+    this.accumulator = 0;
     if (this.inputManager) {
+      this.inputManager.selectedBody = null;
       this.inputManager.resetGroundBody();
     }
     this.buildDefaultScene();
