@@ -38,17 +38,10 @@ export function explodeAt(
 }
 
 /** Recreate a body with all fixtures scaled */
-export function scaleBody(world: planck.World, body: planck.Body, scale: number): planck.Body {
-  const pos = body.getPosition();
-  const angle = body.getAngle();
-  const vel = body.getLinearVelocity();
-  const angVel = body.getAngularVelocity();
-  const type = body.getType();
-  const userData = body.getUserData();
-  const linearDamping = body.getLinearDamping();
-  const angularDamping = body.getAngularDamping();
-
-  const fixtures: {
+export function scaleBody(_world: planck.World, body: planck.Body, scale: number): planck.Body {
+  // Replace fixtures in-place (preserves joints, no body recreation needed)
+  // Shapes are immutable in Box2D, so we destroy and recreate each fixture.
+  const fixtureData: {
     density: number;
     friction: number;
     restitution: number;
@@ -69,7 +62,7 @@ export function scaleBody(world: planck.World, body: planck.Body, scale: number)
       isSensor: f.isSensor(),
       userData: f.getUserData(),
       shapeType: shape.getType(),
-    } as (typeof fixtures)[number];
+    } as (typeof fixtureData)[number];
 
     if (shape.getType() === "circle") {
       const circle = shape as planck.CircleShape;
@@ -82,56 +75,23 @@ export function scaleBody(world: planck.World, body: planck.Body, scale: number)
     } else {
       continue;
     }
-    fixtures.push(fd);
+    fixtureData.push(fd);
   }
 
-  // Save joints to recreate on the new body
-  const savedJoints: {
-    type: string;
-    other: planck.Body;
-    anchorOnThis: planck.Vec2;
-    anchorOnOther: planck.Vec2;
-    props: Record<string, unknown>;
-  }[] = [];
-  for (let je = body.getJointList(); je; je = je.next) {
-    const joint = je.joint;
-    if (!joint) continue;
-    const isA = joint.getBodyA() === body;
-    const other = isA ? joint.getBodyB() : joint.getBodyA();
-    const anchorOnThis = isA ? body.getLocalPoint(joint.getAnchorA()) : body.getLocalPoint(joint.getAnchorB());
-    const anchorOnOther = isA ? joint.getAnchorB() : joint.getAnchorA();
-    const jtype = joint.getType();
-    const props: Record<string, unknown> = {};
-    if (jtype === "distance-joint") {
-      const dj = joint as planck.DistanceJoint;
-      props.length = dj.getLength();
-      props.frequencyHz = dj.getFrequency();
-      props.dampingRatio = dj.getDampingRatio();
-    }
-    savedJoints.push({ type: jtype, other, anchorOnThis, anchorOnOther, props });
-  }
+  // Remove old fixtures
+  const toRemove: planck.Fixture[] = [];
+  for (let f = body.getFixtureList(); f; f = f.getNext()) toRemove.push(f);
+  for (const f of toRemove) body.destroyFixture(f);
 
-  world.destroyBody(body);
-
-  const newBody = world.createBody({
-    type,
-    position: planck.Vec2(pos.x, pos.y),
-    angle,
-    linearDamping,
-    angularDamping,
-  });
-  newBody.setLinearVelocity(planck.Vec2(vel.x, vel.y));
-  newBody.setAngularVelocity(angVel);
-  newBody.setUserData(userData);
-
-  for (const fd of fixtures) {
+  // Create scaled fixtures
+  for (const fd of fixtureData) {
     let shape: planck.Shape;
     if (fd.shapeType === "circle") {
       shape = planck.Circle(planck.Vec2(fd.center!.x, fd.center!.y), fd.radius!);
     } else {
       shape = planck.Polygon(fd.verts!.map((v) => planck.Vec2(v.x, v.y)));
     }
-    const fix = newBody.createFixture({
+    const fix = body.createFixture({
       shape,
       density: fd.density,
       friction: fd.friction,
@@ -141,27 +101,8 @@ export function scaleBody(world: planck.World, body: planck.Body, scale: number)
     if (fd.userData) fix.setUserData(fd.userData);
   }
 
-  // Recreate saved joints on the new body
-  for (const sj of savedJoints) {
-    // Scale the local anchor on this body
-    const localA = planck.Vec2(sj.anchorOnThis.x * scale, sj.anchorOnThis.y * scale);
-    const worldA = newBody.getWorldPoint(localA);
-    const worldB = sj.anchorOnOther;
-    if (sj.type === "distance-joint") {
-      const dj = planck.DistanceJoint({
-        frequencyHz: sj.props.frequencyHz as number,
-        dampingRatio: sj.props.dampingRatio as number,
-        length: sj.props.length as number,
-      }, newBody, sj.other, worldA, worldB);
-      world.createJoint(dj);
-    } else if (sj.type === "revolute-joint") {
-      world.createJoint(planck.RevoluteJoint({}, newBody, sj.other, worldA));
-    } else if (sj.type === "weld-joint") {
-      world.createJoint(planck.WeldJoint({}, newBody, sj.other, worldA));
-    }
-  }
-
-  return newBody;
+  body.resetMassData();
+  return body;
 }
 
 export function destroyBodyAt(world: planck.World, wx: number, wy: number, radius = 0.5): boolean {
