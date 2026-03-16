@@ -117,6 +117,32 @@ export class Renderer {
       }
     }
 
+    // Draw platform preview
+    if (this.inputManager?.platformDraw) {
+      const { start, end } = this.inputManager.platformDraw;
+      const s = camera.toScreen(start.x, start.y, this.canvas);
+      const e = camera.toScreen(end.x, end.y, this.canvas);
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(e.x, e.y);
+      ctx.strokeStyle = "rgba(80, 100, 80, 0.9)";
+      ctx.lineWidth = Math.max(4, 0.3 * camera.zoom);
+      ctx.lineCap = "round";
+      ctx.setLineDash([8, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Endpoint dots
+      ctx.fillStyle = "rgba(120, 160, 120, 0.8)";
+      for (const p of [s, e]) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
     // Draw attach pending highlight
     if (this.inputManager?.attachPending) {
       const body = this.inputManager.attachPending.body;

@@ -19,6 +19,9 @@ export class InputManager {
   // Attract tool state: pulling two bodies together before welding
   attracting: { bodyA: planck.Body; bodyB: planck.Body } | null = null;
 
+  // Platform drawing state (world coords)
+  platformDraw: { start: { x: number; y: number }; end: { x: number; y: number } } | null = null;
+
   // Tool cursor position (screen coords, null when not active)
   toolCursor: { x: number; y: number } | null = null;
 
@@ -97,7 +100,7 @@ export class InputManager {
         this.game.addBall(world.x, world.y);
         break;
       case "platform":
-        this.game.addPlatform(world.x, world.y, 6);
+        this.platformDraw = { start: { x: world.x, y: world.y }, end: { x: world.x, y: world.y } };
         break;
       case "rope":
         this.game.addChainRope(world.x, world.y, 8);
@@ -138,6 +141,11 @@ export class InputManager {
     if (this.tool === "erase" && e.buttons & 1) {
       this.eraseAtScreen(e.clientX, e.clientY);
     }
+
+    if (this.platformDraw) {
+      const world = this.game.camera.toWorld(e.clientX, e.clientY, this.game.canvas);
+      this.platformDraw.end = { x: world.x, y: world.y };
+    }
   }
 
   private onMouseUp(_e: MouseEvent) {
@@ -146,6 +154,7 @@ export class InputManager {
       this.game.world.destroyJoint(this.mouseJoint);
       this.mouseJoint = null;
     }
+    this.finishPlatformDraw();
   }
 
   private onWheel(e: WheelEvent) {
@@ -215,6 +224,10 @@ export class InputManager {
         this.toolCursor = { x: t.clientX, y: t.clientY };
         const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
         this.startGrab(world.x, world.y, GRAB_RADIUS_PX);
+      } else if (this.tool === "platform") {
+        const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
+        this.platformDraw = { start: { x: world.x, y: world.y }, end: { x: world.x, y: world.y } };
+        this.touchToolFired = true;
       } else if (this.tool === "erase") {
         this.toolCursor = { x: t.clientX, y: t.clientY };
         this.eraseAtScreen(t.clientX, t.clientY);
@@ -264,6 +277,9 @@ export class InputManager {
         this.toolCursor = { x: t.x, y: t.y };
         this.eraseAtScreen(t.x, t.y);
         this.touchToolFired = true;
+      } else if (this.platformDraw) {
+        const world = this.game.camera.toWorld(t.x, t.y, this.game.canvas);
+        this.platformDraw.end = { x: world.x, y: world.y };
       }
     }
 
@@ -283,9 +299,6 @@ export class InputManager {
         case "ball":
           this.game.addBall(world.x, world.y);
           break;
-        case "platform":
-          this.game.addPlatform(world.x, world.y, 6);
-          break;
         case "rope":
           this.game.addChainRope(world.x, world.y, 8);
           break;
@@ -304,6 +317,9 @@ export class InputManager {
           break;
       }
     }
+
+    // Finish platform draw on touch end
+    if (e.touches.length === 0) this.finishPlatformDraw();
 
     // Clear erase cursor on touch end
     if (e.touches.length === 0) this.toolCursor = null;
@@ -336,6 +352,21 @@ export class InputManager {
     );
 
     for (const b of toRemove) this.game.world.destroyBody(b);
+  }
+
+  private finishPlatformDraw() {
+    if (!this.platformDraw) return;
+    const { start, end } = this.platformDraw;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const len = Math.hypot(dx, dy);
+    if (len > 0.3) {
+      const cx = (start.x + end.x) / 2;
+      const cy = (start.y + end.y) / 2;
+      const angle = Math.atan2(dy, dx);
+      this.game.addPlatform(cx, cy, len, angle);
+    }
+    this.platformDraw = null;
   }
 
   /** Find the nearest body at world coords */
