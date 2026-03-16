@@ -8,6 +8,7 @@ export type Tool =
   | "rope"
   | "car"
   | "springball"
+  | "launcher"
   | "grab"
   | "erase"
   | "attach"
@@ -130,6 +131,9 @@ export class InputManager {
         break;
       case "springball":
         this.game.addSpringBall(world.x, world.y);
+        break;
+      case "launcher":
+        this.game.addLauncher(world.x, world.y);
         break;
       case "erase":
         this.eraseAtScreen(e.clientX, e.clientY);
@@ -357,6 +361,9 @@ export class InputManager {
           break;
         case "springball":
           this.game.addSpringBall(world.x, world.y);
+          break;
+        case "launcher":
+          this.game.addLauncher(world.x, world.y);
           break;
         case "erase":
           this.eraseAtScreen(t.x, t.y);
