@@ -111,6 +111,52 @@ export class Game {
     return prev; // return last link for attaching things
   }
 
+  addRopeBetween(x1: number, y1: number, x2: number, y2: number, bodyA: planck.Body | null, bodyB: planck.Body | null) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const dist = Math.hypot(dx, dy);
+    const linkLen = 0.4;
+    const links = Math.max(2, Math.round(dist / linkLen));
+    const stepX = dx / links;
+    const stepY = dy / links;
+
+    // Start anchor: use existing body or create static anchor
+    let prev: planck.Body;
+    if (bodyA) {
+      prev = bodyA;
+    } else {
+      prev = this.world.createBody({ type: "static", position: planck.Vec2(x1, y1) });
+      prev.createFixture({ shape: planck.Circle(0.15) });
+    }
+
+    // Chain links
+    for (let i = 1; i < links; i++) {
+      const lx = x1 + stepX * i;
+      const ly = y1 + stepY * i;
+      const link = this.world.createBody({ type: "dynamic", position: planck.Vec2(lx, ly) });
+      link.createFixture({ shape: planck.Box(0.08, linkLen / 2), density: 2, friction: 0.4 });
+      link.setUserData({ fill: "rgba(180,160,120,0.7)" });
+
+      const jx = x1 + stepX * (i - 0.5);
+      const jy = y1 + stepY * (i - 0.5);
+      this.world.createJoint(planck.RevoluteJoint({}, prev, link, planck.Vec2(jx, jy)));
+      prev = link;
+    }
+
+    // End anchor: attach to existing body or create static anchor
+    let end: planck.Body;
+    if (bodyB) {
+      end = bodyB;
+    } else {
+      end = this.world.createBody({ type: "static", position: planck.Vec2(x2, y2) });
+      end.createFixture({ shape: planck.Circle(0.15) });
+    }
+
+    const jx = x1 + stepX * (links - 0.5);
+    const jy = y1 + stepY * (links - 0.5);
+    this.world.createJoint(planck.RevoluteJoint({}, prev, end, planck.Vec2(jx, jy)));
+  }
+
   addSpringBall(x: number, y: number) {
     const sides = 5;
     const radius = 1.5;

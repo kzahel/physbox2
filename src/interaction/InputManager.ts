@@ -9,6 +9,7 @@ export type Tool =
   | "car"
   | "springball"
   | "launcher"
+  | "ropetool"
   | "grab"
   | "erase"
   | "attach"
@@ -38,6 +39,9 @@ export class InputManager {
 
   // Select tool state
   selectedBody: planck.Body | null = null;
+
+  // Rope tool state
+  ropePending: { body: planck.Body | null; x: number; y: number } | null = null;
 
   // Multi-placement mode
   multiPlace = false;
@@ -140,6 +144,9 @@ export class InputManager {
         break;
       case "attach":
         this.handleAttach(world.x, world.y);
+        break;
+      case "ropetool":
+        this.handleRopeTool(world.x, world.y);
         break;
       case "detach":
         this.handleDetach(world.x, world.y);
@@ -372,6 +379,9 @@ export class InputManager {
           this.handleAttach(world.x, world.y);
           break;
         }
+        case "ropetool":
+          this.handleRopeTool(world.x, world.y);
+          break;
         case "detach":
           this.handleDetach(world.x, world.y);
           break;
@@ -467,6 +477,22 @@ export class InputManager {
     );
 
     return target;
+  }
+
+  /** Handle rope tool: two clicks to create a rope between points/bodies */
+  private handleRopeTool(wx: number, wy: number) {
+    const body = this.findBodyAt(wx, wy);
+
+    if (!this.ropePending) {
+      this.ropePending = { body, x: wx, y: wy };
+    } else {
+      const a = this.ropePending;
+      // Don't rope a body to itself
+      if (!(a.body && a.body === body)) {
+        this.game.addRopeBetween(a.x, a.y, wx, wy, a.body, body);
+      }
+      this.ropePending = null;
+    }
   }
 
   /** Handle attach tool click: first click selects, second click welds */
@@ -626,6 +652,7 @@ export class InputManager {
     this.tool = tool;
     this.attachPending = null;
     this.selectedBody = null;
+    this.ropePending = null;
     this.cancelAttract();
     this.onToolChange?.(tool);
   }

@@ -118,6 +118,8 @@ export class Renderer {
         this.drawToolCursor(pos, 10, "rgba(255, 100, 50, 0.6)", "rgba(255, 100, 50, 0.05)");
       } else if (tool === "attract") {
         this.drawToolCursor(pos, 10, "rgba(50, 255, 150, 0.6)", "rgba(50, 255, 150, 0.05)");
+      } else if (tool === "ropetool") {
+        this.drawToolCursor(pos, 10, "rgba(180, 160, 120, 0.6)", "rgba(180, 160, 120, 0.05)");
       }
     }
 
@@ -145,6 +147,15 @@ export class Renderer {
         ctx.fill();
       }
       ctx.restore();
+    }
+
+    // Draw rope pending highlight
+    if (this.inputManager?.ropePending) {
+      const rp = this.inputManager.ropePending;
+      const sp = rp.body
+        ? camera.toScreen(rp.body.getPosition().x, rp.body.getPosition().y, this.canvas)
+        : camera.toScreen(rp.x, rp.y, this.canvas);
+      this.drawToolCursor(sp, 16, "rgba(180, 160, 120, 0.9)", "rgba(180, 160, 120, 0.15)");
     }
 
     // Draw attach pending highlight
