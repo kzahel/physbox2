@@ -33,8 +33,9 @@ export function createRopeBetween(
   const dx = x2 - x1;
   const dy = y2 - y1;
   const dist = Math.hypot(dx, dy);
-  const linkLen = 0.4;
-  const links = Math.max(2, Math.round(dist / linkLen));
+  const MAX_LINKS = 30;
+  const links = Math.max(2, Math.min(MAX_LINKS, Math.round(dist / 0.4)));
+  const linkLen = dist / links;
   const stepX = dx / links;
   const stepY = dy / links;
   const angle = Math.atan2(dy, dx) - Math.PI / 2;
