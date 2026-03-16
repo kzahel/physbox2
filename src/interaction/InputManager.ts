@@ -339,6 +339,8 @@ export class InputManager {
     const cur = this.snapTouches(e);
 
     if (cur.length >= 2 && this.lastTouches.length >= 2) {
+      // Two-finger gesture detected — suppress tool placement on release
+      this.touchToolFired = true;
       // Release any grab when second finger comes in
       if (this.mouseJoint) {
         this.game.world.destroyJoint(this.mouseJoint);
