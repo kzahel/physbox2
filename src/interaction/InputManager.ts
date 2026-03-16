@@ -489,6 +489,10 @@ export class InputManager {
     });
   }
 
+  resetGroundBody() {
+    this.groundBody = this.game.world.createBody({ type: "static" });
+  }
+
   setTool(tool: Tool) {
     this.tool = tool;
     this.attachPending = null;

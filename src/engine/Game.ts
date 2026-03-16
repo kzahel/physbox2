@@ -13,10 +13,19 @@ export class Game {
   renderer: Renderer;
   canvas: HTMLCanvasElement;
 
-  paused = false;
   gravity = -10;
   timeScale = 1;
   inputManager: InputManager | null = null;
+  onPauseChange?: () => void;
+
+  private _paused = false;
+  get paused() {
+    return this._paused;
+  }
+  set paused(v: boolean) {
+    this._paused = v;
+    this.onPauseChange?.();
+  }
 
   // Stats
   fps = 0;
@@ -104,6 +113,19 @@ export class Game {
   setGravity(g: number) {
     this.gravity = g;
     this.world.setGravity(planck.Vec2(0, g));
+  }
+
+  reset() {
+    const allBodies: planck.Body[] = [];
+    for (let b = this.world.getBodyList(); b; b = b.getNext()) {
+      allBodies.push(b);
+    }
+    for (const b of allBodies) this.world.destroyBody(b);
+    // Re-create the ground body used by InputManager
+    if (this.inputManager) {
+      this.inputManager.resetGroundBody();
+    }
+    this.buildDefaultScene();
   }
 
   clearDynamic() {

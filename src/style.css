@@ -36,14 +36,22 @@ body {
 }
 
 #toolbar button {
-  padding: 6px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.06);
   color: #ccc;
-  font-size: 13px;
+  font-size: 10px;
   cursor: pointer;
   transition: all 0.15s;
+}
+
+#toolbar button svg {
+  display: block;
 }
 
 #toolbar button:hover {
@@ -54,6 +62,31 @@ body {
 #toolbar button.active {
   background: rgba(100, 140, 255, 0.3);
   border-color: rgba(100, 140, 255, 0.5);
+  color: #fff;
+}
+
+/* Play/Pause button */
+#play-pause {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  background: rgba(20, 20, 40, 0.85);
+  backdrop-filter: blur(8px);
+  color: #ccc;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+#play-pause:hover {
+  background: rgba(255, 255, 255, 0.12);
   color: #fff;
 }
 
@@ -245,7 +278,7 @@ body {
   }
 
   #toolbar button {
-    padding: 5px 10px;
-    font-size: 12px;
+    padding: 4px 6px;
+    font-size: 9px;
   }
 }

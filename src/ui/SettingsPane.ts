@@ -15,6 +15,7 @@ export class SettingsPane {
 
       <div class="section-title">Actions</div>
       <label><button id="s-clear">Clear Dynamic</button></label>
+      <label><button id="s-reset">Reset Scene</button></label>
       <label><button id="s-pause">${game.paused ? "Play" : "Pause"}</button></label>
       <label><button id="s-fullscreen">Fullscreen</button></label>
 
@@ -37,12 +38,17 @@ export class SettingsPane {
     });
 
     container.querySelector("#s-clear")!.addEventListener("click", () => game.clearDynamic());
+    container.querySelector("#s-reset")!.addEventListener("click", () => game.reset());
 
     const pauseBtn = container.querySelector<HTMLButtonElement>("#s-pause")!;
     pauseBtn.addEventListener("click", () => {
       game.paused = !game.paused;
-      pauseBtn.textContent = game.paused ? "Play" : "Pause";
     });
+    const prevOnPause = game.onPauseChange;
+    game.onPauseChange = () => {
+      prevOnPause?.();
+      pauseBtn.textContent = game.paused ? "Play" : "Pause";
+    };
 
     const fsBtn = container.querySelector<HTMLButtonElement>("#s-fullscreen")!;
     fsBtn.addEventListener("click", () => {
