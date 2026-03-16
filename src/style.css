@@ -1,0 +1,103 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  overflow: hidden;
+  background: #1a1a2e;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #e0e0e0;
+}
+
+#canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  cursor: crosshair;
+}
+
+/* Toolbar */
+#toolbar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(20, 20, 40, 0.85);
+  backdrop-filter: blur(8px);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 10;
+}
+
+#toolbar button {
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ccc;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+#toolbar button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+#toolbar button.active {
+  background: rgba(100, 140, 255, 0.3);
+  border-color: rgba(100, 140, 255, 0.5);
+  color: #fff;
+}
+
+/* Settings pane */
+#settings {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 240px;
+  padding: 12px;
+  background: rgba(20, 20, 40, 0.85);
+  backdrop-filter: blur(8px);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 10;
+  font-size: 13px;
+}
+
+#settings label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+#settings input[type="range"] {
+  width: 120px;
+}
+
+#settings .section-title {
+  font-weight: 600;
+  margin: 10px 0 6px;
+  color: #8af;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+#settings .section-title:first-child {
+  margin-top: 0;
+}
+
+#stats {
+  font-size: 11px;
+  color: #888;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
