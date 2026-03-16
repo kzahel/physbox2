@@ -468,7 +468,7 @@ export class InputManager {
     this.lastTouches = this.snapTouches(e);
   }
 
-  /** Erase all dynamic bodies within the erase cursor radius */
+  /** Erase all bodies within the erase cursor radius */
   private eraseAtScreen(sx: number, sy: number) {
     const r = ERASE_RADIUS_PX / this.game.camera.zoom; // world units
     const world = this.game.camera.toWorld(sx, sy, this.game.canvas);
@@ -479,7 +479,7 @@ export class InputManager {
       planck.AABB(planck.Vec2(world.x - r, world.y - r), planck.Vec2(world.x + r, world.y + r)),
       (fixture) => {
         const body = fixture.getBody();
-        if (!body.isDynamic()) return true;
+        if (body === this.groundBody) return true;
         const d = planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), center));
         if (d < r) toRemove.push(body);
         return true;

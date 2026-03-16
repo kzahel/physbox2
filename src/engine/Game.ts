@@ -639,7 +639,7 @@ export class Game {
     this.world.queryAABB(
       planck.AABB(planck.Vec2(wx - radius, wy - radius), planck.Vec2(wx + radius, wy + radius)),
       (fixture) => {
-        if (fixture.testPoint(point) && fixture.getBody().isDynamic()) {
+        if (fixture.testPoint(point)) {
           found = fixture.getBody();
           return false; // stop query
         }
