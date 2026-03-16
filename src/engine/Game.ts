@@ -5,8 +5,6 @@ import { Renderer } from "./Renderer";
 
 export const KILL_Y = -100;
 const TIMESTEP = 1 / 60;
-const VELOCITY_ITERS = 8;
-const POSITION_ITERS = 3;
 
 export class Game {
   world: planck.World;
@@ -16,6 +14,8 @@ export class Game {
 
   gravity = -10;
   timeScale = 1;
+  velocityIterations = 8;
+  positionIterations = 3;
   inputManager: InputManager | null = null;
   onPauseChange?: () => void;
 
@@ -101,6 +101,8 @@ export class Game {
       const link = this.world.createBody({
         type: "dynamic",
         position: planck.Vec2(x, y - (i + 1) * linkLen),
+        linearDamping: 0.5,
+        angularDamping: 2,
       });
       link.createFixture({ shape: planck.Box(0.08, linkLen / 2), density: 2, friction: 0.4 });
       link.setUserData({ fill: "rgba(180,160,120,0.7)" });
@@ -134,7 +136,7 @@ export class Game {
     for (let i = 1; i < links; i++) {
       const lx = x1 + stepX * i;
       const ly = y1 + stepY * i;
-      const link = this.world.createBody({ type: "dynamic", position: planck.Vec2(lx, ly), angle });
+      const link = this.world.createBody({ type: "dynamic", position: planck.Vec2(lx, ly), angle, linearDamping: 0.5, angularDamping: 2 });
       link.createFixture({ shape: planck.Box(0.08, linkLen / 2), density: 2, friction: 0.4 });
       link.setUserData({ fill: "rgba(180,160,120,0.7)" });
 
@@ -456,7 +458,7 @@ export class Game {
       this.inputManager?.update();
       this.accumulator += dt * this.timeScale;
       while (this.accumulator >= TIMESTEP) {
-        this.world.step(TIMESTEP, VELOCITY_ITERS, POSITION_ITERS);
+        this.world.step(TIMESTEP, this.velocityIterations, this.positionIterations);
         this.accumulator -= TIMESTEP;
       }
     }

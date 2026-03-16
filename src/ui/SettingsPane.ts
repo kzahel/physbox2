@@ -12,6 +12,7 @@ export class SettingsPane {
       <div class="section-title">Simulation</div>
       <label>Gravity <input type="range" id="s-gravity" min="-30" max="10" step="0.5" value="${game.gravity}"></label>
       <label>Speed <input type="range" id="s-speed" min="0" max="3" step="0.1" value="${game.timeScale}"></label>
+      <label>Solver Iters <input type="range" id="s-iters" min="1" max="20" step="1" value="${game.positionIterations}"></label>
 
       <div class="section-title">Actions</div>
       <label><button id="s-clear">Clear Dynamic</button></label>
@@ -35,6 +36,13 @@ export class SettingsPane {
     const speedSlider = container.querySelector<HTMLInputElement>("#s-speed")!;
     speedSlider.addEventListener("input", () => {
       game.timeScale = parseFloat(speedSlider.value);
+    });
+
+    const itersSlider = container.querySelector<HTMLInputElement>("#s-iters")!;
+    itersSlider.addEventListener("input", () => {
+      const v = parseInt(itersSlider.value);
+      game.positionIterations = v;
+      game.velocityIterations = Math.max(v * 2, 4);
     });
 
     container.querySelector("#s-clear")!.addEventListener("click", () => game.clearDynamic());
