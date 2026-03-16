@@ -264,7 +264,7 @@ export class Game {
     // Chassis
     const chassis = this.world.createBody({ type: "dynamic", position: planck.Vec2(x, y) });
     chassis.createFixture({ shape: planck.Box(2, 0.5), density: 1, friction: 0.3 });
-    chassis.setUserData({ fill: "rgba(220,80,60,0.8)" });
+    chassis.setUserData({ fill: "rgba(220,80,60,0.8)", label: "car" });
 
     // Roof
     chassis.createFixture({
@@ -306,14 +306,15 @@ export class Game {
     const body = this.world.createBody({ type: "kinematic", position: planck.Vec2(x, y) });
     const fixture = body.createFixture({ shape: planck.Box(w / 2, 0.2), friction: 1 });
     fixture.setUserData({ fill: "rgba(200,160,50,0.8)", stroke: "rgba(200,160,50,0.5)" });
-    body.setUserData({ fill: "rgba(200,160,50,0.8)", label: "conveyor" });
+    body.setUserData({ fill: "rgba(200,160,50,0.8)", label: "conveyor", speed });
 
-    // Surface velocity: pre-contact listener applies tangent speed
+    // Surface velocity: read speed from userData so it can be toggled
     this.world.on("pre-solve", (contact) => {
       const fA = contact.getFixtureA();
       const fB = contact.getFixtureB();
       if (fA === fixture || fB === fixture) {
-        contact.setTangentSpeed(speed);
+        const ud = body.getUserData() as { speed?: number } | null;
+        contact.setTangentSpeed(ud?.speed ?? speed);
       }
     });
 

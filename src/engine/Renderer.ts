@@ -175,6 +175,10 @@ export class Renderer {
       this.drawToolCursor(sp, 20, "rgba(100, 200, 255, 0.8)", "rgba(100, 200, 255, 0.08)");
       // Toggle button above body
       this.drawToggleButton(sp, body.isStatic());
+      // Direction button for cars/conveyors
+      if (this.inputManager.isDirectional(body)) {
+        this.drawDirectionButton(sp);
+      }
     }
   }
 
@@ -199,6 +203,36 @@ export class Renderer {
     ctx.fillStyle = fill;
     ctx.fill();
     ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  private drawDirectionButton(bodyScreen: { x: number; y: number }) {
+    const ctx = this.ctx;
+    ctx.save();
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const x = bodyScreen.x;
+    const y = bodyScreen.y - 55;
+
+    // Pill button
+    const w = 38;
+    const h = 18;
+    ctx.beginPath();
+    ctx.roundRect(x - w, y - h / 2, w * 2, h, h / 2);
+    ctx.fillStyle = "rgba(100, 140, 255, 0.85)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Reverse arrows ⇄
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("\u21C4 Flip", x, y);
+
     ctx.restore();
   }
 

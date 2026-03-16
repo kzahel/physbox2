@@ -601,23 +601,57 @@ export class InputManager {
     });
   }
 
+  private getBodyLabel(body: planck.Body): string | undefined {
+    return (body.getUserData() as { label?: string } | null)?.label;
+  }
+
+  isDirectional(body: planck.Body): boolean {
+    const label = this.getBodyLabel(body);
+    return label === "car" || label === "conveyor";
+  }
+
   private handleSelect(wx: number, wy: number, sx: number, sy: number) {
-    // Check if clicking the toggle button for current selection
     if (this.selectedBody) {
       const pos = this.selectedBody.getPosition();
       const sp = this.game.camera.toScreen(pos.x, pos.y, this.game.canvas);
-      const btnX = sp.x;
+
+      // Fixed/Free button
       const btnY = sp.y - 30;
-      if (Math.abs(sx - btnX) < 40 && Math.abs(sy - btnY) < 14) {
-        // Toggle static/dynamic
+      if (Math.abs(sx - sp.x) < 40 && Math.abs(sy - btnY) < 14) {
         const isStatic = this.selectedBody.isStatic();
         this.selectedBody.setType(isStatic ? "dynamic" : "static");
         return;
       }
+
+      // Direction button (below fixed/free, only for directional bodies)
+      if (this.isDirectional(this.selectedBody)) {
+        const dirY = sp.y - 55;
+        if (Math.abs(sx - sp.x) < 40 && Math.abs(sy - dirY) < 14) {
+          this.reverseDirection(this.selectedBody);
+          return;
+        }
+      }
     }
-    // Select a new body or deselect
     const body = this.findBodyAt(wx, wy);
     this.selectedBody = body;
+  }
+
+  private reverseDirection(body: planck.Body) {
+    const label = this.getBodyLabel(body);
+    if (label === "car") {
+      // Reverse all wheel joints attached to this body
+      for (let j = this.game.world.getJointList(); j; j = j.getNext()) {
+        if (j.getType() === "wheel-joint" && (j.getBodyA() === body || j.getBodyB() === body)) {
+          const wj = j as planck.WheelJoint;
+          wj.setMotorSpeed(-wj.getMotorSpeed());
+        }
+      }
+    } else if (label === "conveyor") {
+      const ud = body.getUserData() as { speed?: number } | null;
+      if (ud && ud.speed != null) {
+        ud.speed = -ud.speed;
+      }
+    }
   }
 
   private readonly CREATION_TOOLS = new Set<Tool>(["box", "ball", "rope", "car", "springball", "dynamite"]);
