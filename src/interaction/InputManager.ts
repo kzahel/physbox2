@@ -130,16 +130,26 @@ export class InputManager {
     this.game.camera.zoomAt(e.clientX, e.clientY, factor, this.game.canvas);
   }
 
-  private startGrab(wx: number, wy: number) {
+  private startGrab(wx: number, wy: number, radius = 0.01) {
     const point = planck.Vec2(wx, wy);
     let target: planck.Body | null = null;
+    let bestDist = radius;
 
     this.game.world.queryAABB(
-      planck.AABB(planck.Vec2(wx - 0.01, wy - 0.01), planck.Vec2(wx + 0.01, wy + 0.01)),
+      planck.AABB(planck.Vec2(wx - radius, wy - radius), planck.Vec2(wx + radius, wy + radius)),
       (fixture) => {
-        if (fixture.testPoint(point) && fixture.getBody().isDynamic()) {
+        if (!fixture.getBody().isDynamic()) return true;
+        // Exact hit: use immediately
+        if (fixture.testPoint(point)) {
           target = fixture.getBody();
           return false;
+        }
+        // Proximity hit: pick closest within radius
+        const body = fixture.getBody();
+        const d = planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), point));
+        if (d < bestDist) {
+          bestDist = d;
+          target = body;
         }
         return true;
       },
@@ -172,11 +182,12 @@ export class InputManager {
     this.lastTouches = this.snapTouches(e);
     this.touchToolFired = false;
 
-    // Single finger + grab tool → start grab
+    // Single finger + grab tool → start grab (use larger hit radius for fat fingers)
     if (e.touches.length === 1 && this.tool === "grab") {
       const t = e.touches[0];
       const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
-      this.startGrab(world.x, world.y);
+      const touchRadius = 20 / this.game.camera.zoom; // ~20 CSS pixels in world units
+      this.startGrab(world.x, world.y, touchRadius);
     }
   }
 
@@ -222,13 +233,13 @@ export class InputManager {
         const world = this.game.camera.toWorld(t.x, t.y, this.game.canvas);
         this.game.destroyBodyAt(world.x, world.y);
         this.touchToolFired = true;
-      } else if (this.tool !== "grab") {
-        // Single-finger pan when using placement tools (place on tap, pan on drag)
+      } else {
+        // Single-finger pan (for placement tools, or grab tool when not holding a body)
         const dx = t.x - prev.x;
         const dy = t.y - prev.y;
         if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
           this.game.camera.pan(dx, dy);
-          this.touchToolFired = true; // suppress tap-to-place after drag
+          this.touchToolFired = true;
         }
       }
     }
