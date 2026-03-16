@@ -31,7 +31,7 @@ export class Camera {
   zoomAt(sx: number, sy: number, factor: number, canvas: HTMLCanvasElement) {
     const before = this.toWorld(sx, sy, canvas);
     this.zoom *= factor;
-    this.zoom = Math.max(5, Math.min(200, this.zoom));
+    this.zoom = Math.max(1, Math.min(200, this.zoom));
     const after = this.toWorld(sx, sy, canvas);
     this.x -= after.x - before.x;
     this.y -= after.y - before.y;

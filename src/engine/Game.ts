@@ -1,4 +1,5 @@
 import * as planck from "planck";
+import type { InputManager } from "../interaction/InputManager";
 import { Camera } from "./Camera";
 import { Renderer } from "./Renderer";
 
@@ -15,6 +16,7 @@ export class Game {
   paused = false;
   gravity = -10;
   timeScale = 1;
+  inputManager: InputManager | null = null;
 
   // Stats
   fps = 0;
@@ -156,6 +158,7 @@ export class Game {
 
     // Physics step
     if (!this.paused) {
+      this.inputManager?.update();
       this.accumulator += dt * this.timeScale;
       while (this.accumulator >= TIMESTEP) {
         this.world.step(TIMESTEP, VELOCITY_ITERS, POSITION_ITERS);
@@ -163,11 +166,20 @@ export class Game {
       }
     }
 
-    // Count bodies
+    // Kill floor: destroy dynamic bodies that fall too far
+    const killY = -100;
+    const toRemove: planck.Body[] = [];
     let count = 0;
     for (let b = this.world.getBodyList(); b; b = b.getNext()) {
-      if (b.isDynamic()) count++;
+      if (b.isDynamic()) {
+        if (b.getPosition().y < killY) {
+          toRemove.push(b);
+        } else {
+          count++;
+        }
+      }
     }
+    for (const b of toRemove) this.world.destroyBody(b);
     this.bodyCount = count;
 
     // Render

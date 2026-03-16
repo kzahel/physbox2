@@ -17,7 +17,7 @@ export class InputManager {
   attachPending: { body: planck.Body; world: { x: number; y: number } } | null = null;
 
   // Attract tool state: pulling two bodies together before welding
-  attracting: { bodyA: planck.Body; bodyB: planck.Body; joint: planck.Joint } | null = null;
+  attracting: { bodyA: planck.Body; bodyB: planck.Body } | null = null;
 
   // Tool cursor position (screen coords, null when not active)
   toolCursor: { x: number; y: number } | null = null;
@@ -414,47 +414,44 @@ export class InputManager {
       this.attachPending = { body, world: { x: wx, y: wy } };
     } else {
       if (body !== this.attachPending.body) {
-        const bodyA = this.attachPending.body;
-        const bodyB = body;
-        // Create a DistanceJoint with length 0 to pull them together
-        const joint = this.game.world.createJoint(
-          planck.DistanceJoint(
-            { frequencyHz: 3, dampingRatio: 0.5, length: 0 },
-            bodyA,
-            bodyB,
-            bodyA.getPosition(),
-            bodyB.getPosition(),
-          ),
-        )!;
-        this.attracting = { bodyA, bodyB, joint };
+        this.attracting = { bodyA: this.attachPending.body, bodyB: body };
       }
       this.attachPending = null;
     }
   }
 
   private cancelAttract() {
-    if (this.attracting) {
-      this.game.world.destroyJoint(this.attracting.joint);
-      this.attracting = null;
+    this.attracting = null;
+  }
+
+  /** Apply attraction forces — call once per frame */
+  update() {
+    if (!this.attracting) return;
+    const { bodyA, bodyB } = this.attracting;
+    const dir = planck.Vec2.sub(bodyA.getPosition(), bodyB.getPosition());
+    const len = planck.Vec2.lengthOf(dir);
+    if (len < 0.01) return;
+    const force = planck.Vec2.mul(dir, (50 * bodyB.getMass()) / len);
+    bodyB.applyForceToCenter(force, true);
+    if (bodyA.isDynamic()) {
+      bodyA.applyForceToCenter(planck.Vec2.mul(force, -1), true);
     }
   }
 
   private bindContactListener() {
     this.game.world.on("begin-contact", (contact) => {
       if (!this.attracting) return;
-      const { bodyA, bodyB, joint } = this.attracting;
+      const { bodyA, bodyB } = this.attracting;
       const cA = contact.getFixtureA().getBody();
       const cB = contact.getFixtureB().getBody();
       const match = (cA === bodyA && cB === bodyB) || (cA === bodyB && cB === bodyA);
       if (!match) return;
 
-      // Weld at the contact point
       const manifold = contact.getWorldManifold(null);
       const weldPoint = manifold?.points[0] ?? bodyA.getPosition();
       // Defer joint creation to after physics step
       setTimeout(() => {
         if (!this.attracting) return;
-        this.game.world.destroyJoint(joint);
         this.game.world.createJoint(planck.WeldJoint({}, bodyA, bodyB, weldPoint));
         this.attracting = null;
       }, 0);
