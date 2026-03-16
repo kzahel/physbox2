@@ -1,4 +1,11 @@
 import type * as planck from "planck";
+import {
+  BTN_DIRECTION_OFFSET_Y,
+  BTN_HALF_HEIGHT,
+  BTN_HALF_WIDTH,
+  BTN_SPACING,
+  BTN_TOGGLE_OFFSET_Y,
+} from "../../engine/Renderer";
 import type { ToolContext, ToolHandler } from "../ToolHandler";
 
 export class SelectTool implements ToolHandler {
@@ -16,25 +23,25 @@ export class SelectTool implements ToolHandler {
       const sp = this.ctx.game.camera.toScreen(pos.x, pos.y, this.ctx.game.canvas);
 
       // Fixed/Free button
-      const btnY = sp.y - 30;
-      if (Math.abs(sx - sp.x) < 40 && Math.abs(sy - btnY) < 14) {
+      const btnY = sp.y - BTN_TOGGLE_OFFSET_Y;
+      if (Math.abs(sx - sp.x) < BTN_HALF_WIDTH && Math.abs(sy - btnY) < BTN_HALF_HEIGHT) {
         const isStatic = this.selectedBody.isStatic();
         this.selectedBody.setType(isStatic ? "dynamic" : "static");
         return;
       }
 
       // Direction button (below fixed/free, only for directional bodies)
-      let nextY = sp.y - 55;
+      let nextY = sp.y - BTN_DIRECTION_OFFSET_Y;
       if (isDirectional(this.selectedBody)) {
-        if (Math.abs(sx - sp.x) < 40 && Math.abs(sy - nextY) < 14) {
+        if (Math.abs(sx - sp.x) < BTN_HALF_WIDTH && Math.abs(sy - nextY) < BTN_HALF_HEIGHT) {
           reverseDirection(this.selectedBody, this.ctx.game.world);
           return;
         }
-        nextY -= 25;
+        nextY -= BTN_SPACING;
       }
 
       // Motor button
-      if (Math.abs(sx - sp.x) < 40 && Math.abs(sy - nextY) < 14) {
+      if (Math.abs(sx - sp.x) < BTN_HALF_WIDTH && Math.abs(sy - nextY) < BTN_HALF_HEIGHT) {
         toggleMotor(this.selectedBody);
         return;
       }

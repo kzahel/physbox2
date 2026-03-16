@@ -223,58 +223,42 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-export async function saveScene(name: string, game: Game): Promise<void> {
+/** Run a callback against the object store and resolve when the transaction completes. */
+async function dbTransaction<T>(
+  mode: IDBTransactionMode,
+  fn: (store: IDBObjectStore) => IDBRequest | undefined,
+): Promise<T | undefined> {
   const db = await openDB();
-  const scene: SavedScene = {
-    name,
-    data: serializeScene(game),
-    timestamp: Date.now(),
-  };
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put(scene);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    const tx = db.transaction(STORE_NAME, mode);
+    const result = fn(tx.objectStore(STORE_NAME));
+    if (result) {
+      result.onsuccess = () => resolve(result.result as T);
+      result.onerror = () => reject(result.error);
+    } else {
+      tx.oncomplete = () => resolve(undefined);
+      tx.onerror = () => reject(tx.error);
+    }
   });
+}
+
+export async function saveScene(name: string, game: Game): Promise<void> {
+  const scene: SavedScene = { name, data: serializeScene(game), timestamp: Date.now() };
+  await dbTransaction("readwrite", (store) => store.put(scene));
 }
 
 export async function loadScene(name: string, game: Game): Promise<boolean> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const req = tx.objectStore(STORE_NAME).get(name);
-    req.onsuccess = () => {
-      const scene = req.result as SavedScene | undefined;
-      if (!scene) {
-        resolve(false);
-        return;
-      }
-      deserializeScene(game, scene.data);
-      resolve(true);
-    };
-    req.onerror = () => reject(req.error);
-  });
+  const scene = await dbTransaction<SavedScene>("readonly", (store) => store.get(name));
+  if (!scene) return false;
+  deserializeScene(game, scene.data);
+  return true;
 }
 
 export async function listScenes(): Promise<SavedScene[]> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const req = tx.objectStore(STORE_NAME).getAll();
-    req.onsuccess = () => {
-      const scenes = (req.result as SavedScene[]).sort((a, b) => b.timestamp - a.timestamp);
-      resolve(scenes);
-    };
-    req.onerror = () => reject(req.error);
-  });
+  const scenes = await dbTransaction<SavedScene[]>("readonly", (store) => store.getAll());
+  return (scenes ?? []).sort((a, b) => b.timestamp - a.timestamp);
 }
 
 export async function deleteScene(name: string): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).delete(name);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  await dbTransaction("readwrite", (store) => store.delete(name));
 }

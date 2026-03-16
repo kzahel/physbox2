@@ -6,10 +6,37 @@ import {
   hasMotor,
   type InputManager,
   isDirectional,
+  type Tool,
 } from "../interaction/InputManager";
 import type { Camera } from "./Camera";
 import { KILL_Y, KILL_Y_TOP } from "./Game";
 import { ParticleSystem } from "./ParticleSystem";
+
+/** Button dimensions shared with SelectTool for hit detection */
+export const BTN_HALF_WIDTH = 38;
+export const BTN_HALF_HEIGHT = 9;
+export const BTN_TOGGLE_OFFSET_Y = 30;
+export const BTN_DIRECTION_OFFSET_Y = 55;
+export const BTN_SPACING = 25;
+
+interface CursorStyle {
+  radius: number;
+  stroke: string;
+  fill: string;
+}
+
+const TOOL_CURSORS: Partial<Record<Tool, CursorStyle>> = {
+  erase: { radius: ERASE_RADIUS_PX, stroke: "rgba(255, 80, 80, 0.7)", fill: "rgba(255, 80, 80, 0.1)" },
+  grab: { radius: GRAB_RADIUS_PX, stroke: "rgba(100, 200, 255, 0.5)", fill: "rgba(100, 200, 255, 0.05)" },
+  attach: { radius: 10, stroke: "rgba(255, 200, 50, 0.6)", fill: "rgba(255, 200, 50, 0.05)" },
+  detach: { radius: 10, stroke: "rgba(255, 100, 50, 0.6)", fill: "rgba(255, 100, 50, 0.05)" },
+  attract: { radius: 10, stroke: "rgba(50, 255, 150, 0.6)", fill: "rgba(50, 255, 150, 0.05)" },
+  ropetool: { radius: 10, stroke: "rgba(180, 160, 120, 0.6)", fill: "rgba(180, 160, 120, 0.05)" },
+  spring: { radius: 10, stroke: "rgba(180, 160, 120, 0.6)", fill: "rgba(180, 160, 120, 0.05)" },
+  glue: { radius: GLUE_RADIUS_PX, stroke: "rgba(255, 220, 50, 0.7)", fill: "rgba(255, 220, 50, 0.1)" },
+  unglue: { radius: GLUE_RADIUS_PX, stroke: "rgba(255, 120, 50, 0.7)", fill: "rgba(255, 120, 50, 0.1)" },
+  scale: { radius: 14, stroke: "rgba(180, 120, 255, 0.6)", fill: "rgba(180, 120, 255, 0.05)" },
+};
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
@@ -130,24 +157,9 @@ export class Renderer {
     if (this.inputManager?.toolCursor) {
       const tool = this.inputManager.tool;
       const pos = this.inputManager.toolCursor;
-      if (tool === "erase") {
-        this.drawToolCursor(pos, ERASE_RADIUS_PX, "rgba(255, 80, 80, 0.7)", "rgba(255, 80, 80, 0.1)");
-      } else if (tool === "grab") {
-        this.drawToolCursor(pos, GRAB_RADIUS_PX, "rgba(100, 200, 255, 0.5)", "rgba(100, 200, 255, 0.05)");
-      } else if (tool === "attach") {
-        this.drawToolCursor(pos, 10, "rgba(255, 200, 50, 0.6)", "rgba(255, 200, 50, 0.05)");
-      } else if (tool === "detach") {
-        this.drawToolCursor(pos, 10, "rgba(255, 100, 50, 0.6)", "rgba(255, 100, 50, 0.05)");
-      } else if (tool === "attract") {
-        this.drawToolCursor(pos, 10, "rgba(50, 255, 150, 0.6)", "rgba(50, 255, 150, 0.05)");
-      } else if (tool === "ropetool" || tool === "spring") {
-        this.drawToolCursor(pos, 10, "rgba(180, 160, 120, 0.6)", "rgba(180, 160, 120, 0.05)");
-      } else if (tool === "glue") {
-        this.drawToolCursor(pos, GLUE_RADIUS_PX, "rgba(255, 220, 50, 0.7)", "rgba(255, 220, 50, 0.1)");
-      } else if (tool === "unglue") {
-        this.drawToolCursor(pos, GLUE_RADIUS_PX, "rgba(255, 120, 50, 0.7)", "rgba(255, 120, 50, 0.1)");
-      } else if (tool === "scale" && !this.inputManager?.scaleDrag) {
-        this.drawToolCursor(pos, 14, "rgba(180, 120, 255, 0.6)", "rgba(180, 120, 255, 0.05)");
+      if (tool !== "scale" || !this.inputManager?.scaleDrag) {
+        const style = TOOL_CURSORS[tool];
+        if (style) this.drawToolCursor(pos, style.radius, style.stroke, style.fill);
       }
     }
 
@@ -234,17 +246,13 @@ export class Renderer {
       const sp = camera.toScreen(bpos.x, bpos.y, this.canvas);
       const ringSize = 20 * sd.currentScale;
       this.drawToolCursor(sp, ringSize, "rgba(180, 120, 255, 0.8)", "rgba(180, 120, 255, 0.1)");
-      // Scale factor label
-      const ctx = this.ctx;
-      ctx.save();
-      const dpr = window.devicePixelRatio || 1;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.fillStyle = "#fff";
-      ctx.font = "bold 13px system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(`${sd.currentScale.toFixed(1)}x`, sp.x, sp.y - ringSize - 14);
-      ctx.restore();
+      this.inScreenSpace(() => {
+        this.ctx.fillStyle = "#fff";
+        this.ctx.font = "bold 13px system-ui, sans-serif";
+        this.ctx.textAlign = "center";
+        this.ctx.textBaseline = "middle";
+        this.ctx.fillText(`${sd.currentScale.toFixed(1)}x`, sp.x, sp.y - ringSize - 14);
+      });
     }
 
     // Draw select tool UI
@@ -257,10 +265,10 @@ export class Renderer {
       // Toggle button above body
       this.drawToggleButton(sp, body.isStatic());
       // Direction button for cars/conveyors
-      let nextBtnY = 55;
+      let nextBtnY = BTN_DIRECTION_OFFSET_Y;
       if (isDirectional(body)) {
         this.drawDirectionButton(sp, nextBtnY);
-        nextBtnY += 25;
+        nextBtnY += BTN_SPACING;
       }
       // Motor button
       this.drawMotorButton(sp, nextBtnY, hasMotor(body));
@@ -274,79 +282,50 @@ export class Renderer {
   private inputManager: InputManager | null = null;
 
   private drawToolCursor(pos: { x: number; y: number }, radius: number, stroke: string, fill: string) {
-    const ctx = this.ctx;
-    ctx.save();
-    // Reset to CSS-pixel identity so screen coords map correctly
-    const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.beginPath();
-    ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = stroke;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
-    ctx.stroke();
-    ctx.fillStyle = fill;
-    ctx.fill();
-    ctx.setLineDash([]);
-    ctx.restore();
+    this.inScreenSpace(() => {
+      this.ctx.beginPath();
+      this.ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+      this.ctx.strokeStyle = stroke;
+      this.ctx.lineWidth = 2;
+      this.ctx.setLineDash([6, 4]);
+      this.ctx.stroke();
+      this.ctx.fillStyle = fill;
+      this.ctx.fill();
+      this.ctx.setLineDash([]);
+    });
   }
 
-  private drawDirectionButton(bodyScreen: { x: number; y: number }, offsetY = 55) {
-    const ctx = this.ctx;
-    ctx.save();
-    const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  private drawPillButton(x: number, y: number, label: string, bg: string) {
+    this.inScreenSpace(() => {
+      const ctx = this.ctx;
+      const h = BTN_HALF_HEIGHT * 2;
+      ctx.beginPath();
+      ctx.roundRect(x - BTN_HALF_WIDTH, y - BTN_HALF_HEIGHT, BTN_HALF_WIDTH * 2, h, h / 2);
+      ctx.fillStyle = bg;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
 
-    const x = bodyScreen.x;
-    const y = bodyScreen.y - offsetY;
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 11px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, x, y);
+    });
+  }
 
-    // Pill button
-    const w = 38;
-    const h = 18;
-    ctx.beginPath();
-    ctx.roundRect(x - w, y - h / 2, w * 2, h, h / 2);
-    ctx.fillStyle = "rgba(100, 140, 255, 0.85)";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Reverse arrows ⇄
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 11px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("\u21C4 Flip", x, y);
-
-    ctx.restore();
+  private drawDirectionButton(bodyScreen: { x: number; y: number }, offsetY = BTN_DIRECTION_OFFSET_Y) {
+    this.drawPillButton(bodyScreen.x, bodyScreen.y - offsetY, "\u21C4 Flip", "rgba(100, 140, 255, 0.85)");
   }
 
   private drawMotorButton(bodyScreen: { x: number; y: number }, offsetY: number, active: boolean) {
-    const ctx = this.ctx;
-    ctx.save();
-    const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const x = bodyScreen.x;
-    const y = bodyScreen.y - offsetY;
-
-    const w = 38;
-    const h = 18;
-    ctx.beginPath();
-    ctx.roundRect(x - w, y - h / 2, w * 2, h, h / 2);
-    ctx.fillStyle = active ? "rgba(255, 160, 50, 0.85)" : "rgba(120, 120, 140, 0.85)";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 11px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(active ? "\u2699 Motor" : "\u2699 Motor", x, y);
-
-    ctx.restore();
+    this.drawPillButton(
+      bodyScreen.x,
+      bodyScreen.y - offsetY,
+      "\u2699 Motor",
+      active ? "rgba(255, 160, 50, 0.85)" : "rgba(120, 120, 140, 0.85)",
+    );
   }
 
   private drawOcean(camera: Camera) {
@@ -568,35 +547,12 @@ export class Renderer {
   }
 
   private drawToggleButton(bodyScreen: { x: number; y: number }, isStatic: boolean) {
-    const ctx = this.ctx;
-    ctx.save();
-    const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const x = bodyScreen.x;
-    const y = bodyScreen.y - 30;
-    const label = isStatic ? "Fixed" : "Free";
-    const bg = isStatic ? "rgba(200, 80, 80, 0.85)" : "rgba(80, 160, 80, 0.85)";
-
-    // Pill button
-    const w = 38;
-    const h = 18;
-    ctx.beginPath();
-    ctx.roundRect(x - w, y - h / 2, w * 2, h, h / 2);
-    ctx.fillStyle = bg;
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Label
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 11px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(label, x, y);
-
-    ctx.restore();
+    this.drawPillButton(
+      bodyScreen.x,
+      bodyScreen.y - BTN_TOGGLE_OFFSET_Y,
+      isStatic ? "Fixed" : "Free",
+      isStatic ? "rgba(200, 80, 80, 0.85)" : "rgba(80, 160, 80, 0.85)",
+    );
   }
 
   private drawJoints(world: planck.World, camera: Camera) {
@@ -660,6 +616,15 @@ export class Renderer {
     ctx.lineTo(sa.x + dx * tEnd, sa.y + dy * tEnd);
     ctx.lineTo(sb.x, sb.y);
     ctx.stroke();
+  }
+
+  /** Reset transform to CSS-pixel identity for screen-space drawing */
+  private inScreenSpace(fn: () => void) {
+    this.ctx.save();
+    const dpr = window.devicePixelRatio || 1;
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fn();
+    this.ctx.restore();
   }
 
   private bodyColor(body: planck.Body): string {
