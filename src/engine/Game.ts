@@ -270,42 +270,103 @@ export class Game {
   }
 
   addCar(x: number, y: number) {
+    const r = Math.random;
+
+    // Random size multiplier (0.7 – 1.4)
+    const sz = 0.7 + r() * 0.7;
+    const halfW = 2 * sz;
+    const halfH = 0.5 * sz;
+
+    // Random body color
+    const hue = Math.floor(r() * 360);
+    const sat = 50 + Math.floor(r() * 40);
+    const lit = 40 + Math.floor(r() * 25);
+    const bodyColor = `hsla(${hue},${sat}%,${lit}%,0.85)`;
+
+    // Random wheel color (dark grays / browns)
+    const wg = 30 + Math.floor(r() * 40);
+    const wheelColor = `rgba(${wg},${wg},${Math.floor(wg * 0.8)},0.9)`;
+
     // Chassis
     const chassis = this.world.createBody({ type: "dynamic", position: planck.Vec2(x, y) });
-    chassis.createFixture({ shape: planck.Box(2, 0.5), density: 1, friction: 0.3 });
-    chassis.setUserData({ fill: "rgba(220,80,60,0.8)", label: "car" });
+    chassis.createFixture({ shape: planck.Box(halfW, halfH), density: 0.8 + r() * 0.6, friction: 0.3 });
+    chassis.setUserData({ fill: bodyColor, label: "car" });
 
-    // Roof
-    chassis.createFixture({
-      shape: planck.Polygon([
-        planck.Vec2(-1.2, 0.5),
-        planck.Vec2(-0.6, 1.1),
-        planck.Vec2(1.0, 1.1),
-        planck.Vec2(1.4, 0.5),
-      ]),
-      density: 0.5,
-    });
+    // Body style variant
+    const style = Math.floor(r() * 4);
+    if (style === 0) {
+      // Sedan: symmetric cab
+      chassis.createFixture({
+        shape: planck.Polygon([
+          planck.Vec2(-halfW * 0.6, halfH),
+          planck.Vec2(-halfW * 0.3, halfH + halfH * 1.2),
+          planck.Vec2(halfW * 0.5, halfH + halfH * 1.2),
+          planck.Vec2(halfW * 0.7, halfH),
+        ]),
+        density: 0.5,
+      });
+    } else if (style === 1) {
+      // Truck: flat bed + small cab
+      chassis.createFixture({
+        shape: planck.Polygon([
+          planck.Vec2(halfW * 0.3, halfH),
+          planck.Vec2(halfW * 0.3, halfH + halfH * 1.4),
+          planck.Vec2(halfW * 0.9, halfH + halfH * 1.4),
+          planck.Vec2(halfW * 0.9, halfH),
+        ]),
+        density: 0.4,
+      });
+    } else if (style === 2) {
+      // Sports: low wedge
+      chassis.createFixture({
+        shape: planck.Polygon([
+          planck.Vec2(-halfW * 0.8, halfH),
+          planck.Vec2(-halfW * 0.2, halfH + halfH * 0.8),
+          planck.Vec2(halfW * 0.6, halfH + halfH * 0.8),
+          planck.Vec2(halfW * 0.9, halfH),
+        ]),
+        density: 0.6,
+      });
+    } else {
+      // SUV: tall boxy top
+      chassis.createFixture({
+        shape: planck.Polygon([
+          planck.Vec2(-halfW * 0.7, halfH),
+          planck.Vec2(-halfW * 0.7, halfH + halfH * 1.6),
+          planck.Vec2(halfW * 0.7, halfH + halfH * 1.6),
+          planck.Vec2(halfW * 0.7, halfH),
+        ]),
+        density: 0.4,
+      });
+    }
 
-    const wheelRadius = 0.5;
+    // Random motor params
+    const motorSpeed = -(6 + r() * 14); // -6 to -20
+    const torque = 25 + r() * 75; // 25 to 100
+
+    const wheelRadius = (0.35 + r() * 0.3) * sz;
     const suspAxis = planck.Vec2(0, 1);
     const wheelOpts = {
       enableMotor: true,
-      motorSpeed: -10,
-      maxMotorTorque: 50,
-      frequencyHz: 4,
-      dampingRatio: 0.7,
+      motorSpeed,
+      maxMotorTorque: torque,
+      frequencyHz: 3 + r() * 3,
+      dampingRatio: 0.5 + r() * 0.4,
     };
 
+    const wheelX = halfW * 0.6;
+    const wheelY = -(halfH + wheelRadius * 0.4);
+
     // Rear wheel
-    const rearWheel = this.world.createBody({ type: "dynamic", position: planck.Vec2(x - 1.2, y - 0.7) });
-    rearWheel.createFixture({ shape: planck.Circle(wheelRadius), density: 1, friction: 0.9 });
-    rearWheel.setUserData({ fill: "rgba(50,50,50,0.9)" });
+    const rearWheel = this.world.createBody({ type: "dynamic", position: planck.Vec2(x - wheelX, y + wheelY) });
+    rearWheel.createFixture({ shape: planck.Circle(wheelRadius), density: 1, friction: 0.7 + r() * 0.3 });
+    rearWheel.setUserData({ fill: wheelColor });
     this.world.createJoint(planck.WheelJoint(wheelOpts, chassis, rearWheel, rearWheel.getPosition(), suspAxis));
 
     // Front wheel
-    const frontWheel = this.world.createBody({ type: "dynamic", position: planck.Vec2(x + 1.2, y - 0.7) });
-    frontWheel.createFixture({ shape: planck.Circle(wheelRadius), density: 1, friction: 0.9 });
-    frontWheel.setUserData({ fill: "rgba(50,50,50,0.9)" });
+    const frontWheel = this.world.createBody({ type: "dynamic", position: planck.Vec2(x + wheelX, y + wheelY) });
+    frontWheel.createFixture({ shape: planck.Circle(wheelRadius), density: 1, friction: 0.7 + r() * 0.3 });
+    frontWheel.setUserData({ fill: wheelColor });
     this.world.createJoint(planck.WheelJoint(wheelOpts, chassis, frontWheel, frontWheel.getPosition(), suspAxis));
 
     return chassis;
