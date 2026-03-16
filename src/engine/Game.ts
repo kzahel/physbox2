@@ -116,6 +116,11 @@ export class Game {
     this.world.setGravity(planck.Vec2(0, g));
   }
 
+  setGravityXY(gx: number, gy: number) {
+    this.gravity = gy;
+    this.world.setGravity(planck.Vec2(gx, gy));
+  }
+
   reset() {
     const allBodies: planck.Body[] = [];
     for (let b = this.world.getBodyList(); b; b = b.getNext()) {

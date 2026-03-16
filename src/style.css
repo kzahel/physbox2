@@ -90,6 +90,50 @@ body {
   color: #fff;
 }
 
+/* Bottom tools panel */
+#bottom-tools {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+  /* shift right to not overlap play/pause */
+  margin-left: 32px;
+}
+
+#bottom-tools:empty {
+  display: none;
+}
+
+#bottom-tools button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 22px;
+  background: rgba(20, 20, 40, 0.85);
+  backdrop-filter: blur(8px);
+  color: #ccc;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+#bottom-tools button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+#bottom-tools button.active {
+  background: rgba(100, 140, 255, 0.3);
+  border-color: rgba(100, 140, 255, 0.5);
+  color: #fff;
+}
+
 /* Hamburger button – hidden on desktop */
 #hamburger {
   display: none;
