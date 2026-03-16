@@ -34,9 +34,8 @@ const TOOLS: { id: Tool; label: string }[] = [
   { id: "dynamite", label: "TNT" },
   { id: "ropetool", label: "Tie" },
   { id: "erase", label: "Erase" },
-  { id: "attach", label: "Attach" },
+  { id: "attract", label: "Attach" },
   { id: "detach", label: "Detach" },
-  { id: "attract", label: "Attach+" },
   { id: "select", label: "Select" },
 ];
 
