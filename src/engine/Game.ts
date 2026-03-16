@@ -17,7 +17,7 @@ import { createSeesaw } from "../prefabs/Seesaw";
 import { createSpringBall } from "../prefabs/SpringBall";
 import { playBounce, playWoodHit, unlockAudio } from "./Audio";
 import { Camera } from "./Camera";
-import { clearDynamic, destroyBodyAt, explodeAt, scaleBody } from "./Physics";
+import { clearDynamic, destroyBodyAt, explodeAt, markDestroyed, scaleBody } from "./Physics";
 import { Renderer } from "./Renderer";
 
 export const KILL_Y = -100;
@@ -319,7 +319,10 @@ export class Game {
         }
       }
     }
-    for (const b of toRemove) this.world.destroyBody(b);
+    for (const b of toRemove) {
+      markDestroyed(b);
+      this.world.destroyBody(b);
+    }
     this.bodyCount = count;
 
     // Camera follow — update followBody when selection changes

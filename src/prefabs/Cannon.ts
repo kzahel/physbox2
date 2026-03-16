@@ -22,7 +22,8 @@ export function createCannon(
   body.setUserData({ fill: "rgba(80,80,90,0.9)", label: "cannon" });
 
   const fire = () => {
-    if (!body.isActive() || !body.getWorld()) return;
+    const ud = body.getUserData() as { destroyed?: boolean } | null;
+    if (ud?.destroyed) return;
     const pos = body.getPosition();
     const a = body.getAngle();
     const dirX = Math.cos(a);
@@ -49,14 +50,16 @@ export function createCannon(
       if (fA === body || fB === body) return;
       exploded = true;
       setTimeout(() => {
-        if (!ball.isActive()) return;
+        const bud = ball.getUserData() as { destroyed?: boolean } | null;
+        if (bud?.destroyed) return;
         explodeAt(ball.getPosition().x, ball.getPosition().y, 5, 20);
         world.destroyBody(ball);
       }, 0);
     });
 
     setTimeout(() => {
-      if (!exploded && ball.isActive()) world.destroyBody(ball);
+      const bud = ball.getUserData() as { destroyed?: boolean } | null;
+      if (!exploded && !bud?.destroyed) world.destroyBody(ball);
     }, 5000);
 
     setTimeout(fire, 1000);

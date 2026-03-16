@@ -2,6 +2,13 @@ import * as planck from "planck";
 import { playExplosion } from "./Audio";
 import type { Renderer } from "./Renderer";
 
+/** Mark a body as destroyed in its userData so timer-based prefabs (cannons, dynamite) stop. */
+export function markDestroyed(body: planck.Body): void {
+  const ud = (body.getUserData() ?? {}) as Record<string, unknown>;
+  ud.destroyed = true;
+  body.setUserData(ud);
+}
+
 /** Reusable explosion: particles, sound, radial impulse */
 export function explodeAt(
   world: planck.World,
@@ -152,6 +159,7 @@ export function findClosestBody(world: planck.World, wx: number, wy: number, rad
 export function destroyBodyAt(world: planck.World, wx: number, wy: number, radius = 0.5): boolean {
   const body = findClosestBody(world, wx, wy, radius);
   if (body) {
+    markDestroyed(body);
     world.destroyBody(body);
     return true;
   }
@@ -163,5 +171,8 @@ export function clearDynamic(world: planck.World): void {
   for (let b = world.getBodyList(); b; b = b.getNext()) {
     if (b.isDynamic()) toRemove.push(b);
   }
-  for (const b of toRemove) world.destroyBody(b);
+  for (const b of toRemove) {
+    markDestroyed(b);
+    world.destroyBody(b);
+  }
 }

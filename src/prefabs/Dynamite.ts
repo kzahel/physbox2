@@ -17,7 +17,8 @@ export function createDynamite(
   });
 
   setTimeout(() => {
-    if (!body.isActive()) return;
+    const ud = body.getUserData() as { destroyed?: boolean } | null;
+    if (ud?.destroyed) return;
     const pos = body.getPosition();
     explodeAt(pos.x, pos.y, 8, 30);
     world.destroyBody(body);

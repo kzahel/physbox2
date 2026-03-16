@@ -1,5 +1,6 @@
 import * as planck from "planck";
 import type { Game } from "./Game";
+import { markDestroyed } from "./Physics";
 
 // ── Serialization types ──
 
@@ -130,7 +131,10 @@ export function deserializeScene(game: Game, data: SceneData) {
   for (let b = game.world.getBodyList(); b; b = b.getNext()) {
     bodiesToRemove.push(b);
   }
-  for (const b of bodiesToRemove) game.world.destroyBody(b);
+  for (const b of bodiesToRemove) {
+    markDestroyed(b);
+    game.world.destroyBody(b);
+  }
 
   game.setGravity(data.gravity);
 
