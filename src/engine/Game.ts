@@ -45,6 +45,7 @@ export class Game {
   positionIterations = 3;
   inputManager: InputManager | null = null;
   ragdolls: RagdollData[] = [];
+  followSelected = false;
   onPauseChange?: () => void;
 
   private _paused = false;
@@ -290,6 +291,16 @@ export class Game {
     }
     for (const b of toRemove) this.world.destroyBody(b);
     this.bodyCount = count;
+
+    // Camera follow
+    if (this.followSelected) {
+      const target = this.inputManager?.selectedBody;
+      if (target && target.isActive()) {
+        const pos = target.getPosition();
+        this.camera.x = pos.x;
+        this.camera.y = pos.y;
+      }
+    }
 
     // Render
     this.renderer.drawWorld(this.world, this.camera);

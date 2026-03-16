@@ -42,6 +42,16 @@ multiBtn.addEventListener("click", () => {
 });
 bottomTools.appendChild(multiBtn);
 
+// Follow selected body toggle
+const followBtn = document.createElement("button");
+followBtn.textContent = "Follow";
+followBtn.addEventListener("click", () => {
+  game.followSelected = !game.followSelected;
+  followBtn.classList.toggle("active", game.followSelected);
+  followBtn.textContent = game.followSelected ? "Follow: ON" : "Follow";
+});
+bottomTools.appendChild(followBtn);
+
 // Tilt gravity (only on devices with orientation sensor)
 if (TiltGravity.isSupported()) {
   const tilt = new TiltGravity(game);
