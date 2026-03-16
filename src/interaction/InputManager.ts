@@ -1,5 +1,6 @@
-import * as planck from "planck";
+import type * as planck from "planck";
 import type { Game } from "../engine/Game";
+import { findClosestBody } from "../engine/Physics";
 import { RagdollController } from "./RagdollController";
 import type { ToolContext, ToolHandler } from "./ToolHandler";
 import { AttachTool } from "./tools/AttachTool";
@@ -193,7 +194,7 @@ export class InputManager {
     return this.attachTool.attachPending;
   }
 
-  get ropePending(): { body: import("planck").Body | null; x: number; y: number } | null {
+  get ropePending(): { body: planck.Body | null; x: number; y: number } | null {
     if (this.tool === "spring") return this.springTool.ropePending;
     return this.ropeTool.ropePending;
   }
@@ -471,28 +472,6 @@ export class InputManager {
 
   private findBodyAt(wx: number, wy: number, radiusPx = 10): planck.Body | null {
     const radius = radiusPx / this.game.camera.zoom;
-    const point = planck.Vec2(wx, wy);
-    let target: planck.Body | null = null;
-    let bestDist = Number.POSITIVE_INFINITY;
-
-    this.game.world.queryAABB(
-      planck.AABB(planck.Vec2(wx - radius, wy - radius), planck.Vec2(wx + radius, wy + radius)),
-      (fixture) => {
-        const body = fixture.getBody();
-        if (fixture.testPoint(point)) {
-          target = body;
-          bestDist = 0;
-          return false;
-        }
-        const d = planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), point));
-        if (d < bestDist) {
-          bestDist = d;
-          target = body;
-        }
-        return true;
-      },
-    );
-
-    return target;
+    return findClosestBody(this.game.world, wx, wy, radius);
   }
 }

@@ -37,6 +37,6 @@ export function applyRocketThrust(world: planck.World, renderer: Renderer, dt: n
     const pos = b.getPosition();
     const exhaustX = pos.x + Math.sin(angle) * 1.0;
     const exhaustY = pos.y - Math.cos(angle) * 1.0;
-    renderer.spawnFlame(exhaustX, exhaustY, angle);
+    renderer.particles.spawnFlame(exhaustX, exhaustY, angle);
   }
 }

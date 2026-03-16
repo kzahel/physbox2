@@ -12,26 +12,17 @@ export function explodeAt(
   force: number,
 ): void {
   const center = planck.Vec2(wx, wy);
-  renderer.spawnExplosion(wx, wy);
+  renderer.particles.spawnExplosion(wx, wy);
   playExplosion(0.3);
 
-  const affected: { body: planck.Body; dist: number }[] = [];
-  world.queryAABB(
-    planck.AABB(planck.Vec2(wx - radius, wy - radius), planck.Vec2(wx + radius, wy + radius)),
-    (fixture) => {
-      const b = fixture.getBody();
-      if (!b.isDynamic()) return true;
-      const d = planck.Vec2.lengthOf(planck.Vec2.sub(b.getPosition(), center));
-      if (d < radius) affected.push({ body: b, dist: d });
-      return true;
-    },
-  );
+  const affected = queryBodiesInRadius(world, wx, wy, radius);
 
-  for (const { body: b, dist } of affected) {
+  for (const b of affected) {
+    if (!b.isDynamic()) continue;
     const dir = planck.Vec2.sub(b.getPosition(), center);
     const len = planck.Vec2.lengthOf(dir);
     if (len < 0.01) continue;
-    const falloff = 1 - dist / radius;
+    const falloff = 1 - len / radius;
     const impulse = planck.Vec2.mul(dir, (force * falloff * b.getMass()) / len);
     b.applyLinearImpulse(impulse, b.getPosition(), true);
   }
@@ -105,23 +96,63 @@ export function scaleBody(_world: planck.World, body: planck.Body, scale: number
   return body;
 }
 
-export function destroyBodyAt(world: planck.World, wx: number, wy: number, radius = 0.5): boolean {
-  const point = planck.Vec2(wx, wy);
-  let found: planck.Body | null = null;
+/** Collect unique dynamic/static bodies whose center is within `radius` world-units of (wx, wy). */
+export function queryBodiesInRadius(
+  world: planck.World,
+  wx: number,
+  wy: number,
+  radius: number,
+  exclude?: planck.Body,
+): planck.Body[] {
+  const center = planck.Vec2(wx, wy);
+  const bodies: planck.Body[] = [];
 
   world.queryAABB(
     planck.AABB(planck.Vec2(wx - radius, wy - radius), planck.Vec2(wx + radius, wy + radius)),
     (fixture) => {
-      if (fixture.testPoint(point)) {
-        found = fixture.getBody();
-        return false;
+      const body = fixture.getBody();
+      if (body === exclude) return true;
+      if (planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), center)) < radius) {
+        if (!bodies.includes(body)) bodies.push(body);
       }
       return true;
     },
   );
 
-  if (found) {
-    world.destroyBody(found);
+  return bodies;
+}
+
+/** Find the closest body to a world point, preferring exact testPoint hits. */
+export function findClosestBody(world: planck.World, wx: number, wy: number, radius: number): planck.Body | null {
+  const point = planck.Vec2(wx, wy);
+  let target: planck.Body | null = null;
+  let bestDist = Number.POSITIVE_INFINITY;
+
+  world.queryAABB(
+    planck.AABB(planck.Vec2(wx - radius, wy - radius), planck.Vec2(wx + radius, wy + radius)),
+    (fixture) => {
+      const body = fixture.getBody();
+      if (fixture.testPoint(point)) {
+        target = body;
+        bestDist = 0;
+        return false;
+      }
+      const d = planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), point));
+      if (d < bestDist) {
+        bestDist = d;
+        target = body;
+      }
+      return true;
+    },
+  );
+
+  return target;
+}
+
+export function destroyBodyAt(world: planck.World, wx: number, wy: number, radius = 0.5): boolean {
+  const body = findClosestBody(world, wx, wy, radius);
+  if (body) {
+    world.destroyBody(body);
     return true;
   }
   return false;

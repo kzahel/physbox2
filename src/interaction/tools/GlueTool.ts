@@ -1,41 +1,12 @@
 import * as planck from "planck";
-import type { ToolContext, ToolHandler } from "../ToolHandler";
+import { BrushTool } from "./BrushTool";
 
 export const GLUE_RADIUS_PX = 28;
 
-export class GlueTool implements ToolHandler {
-  private ctx: ToolContext;
+export class GlueTool extends BrushTool {
+  readonly radiusPx = GLUE_RADIUS_PX;
 
-  constructor(ctx: ToolContext) {
-    this.ctx = ctx;
-  }
-
-  onDown(_wx: number, _wy: number, sx: number, sy: number) {
-    this.glueAtScreen(sx, sy);
-  }
-
-  onBrush(_wx: number, _wy: number, sx: number, sy: number) {
-    this.glueAtScreen(sx, sy);
-  }
-
-  private glueAtScreen(sx: number, sy: number) {
-    const r = GLUE_RADIUS_PX / this.ctx.game.camera.zoom;
-    const world = this.ctx.game.camera.toWorld(sx, sy, this.ctx.game.canvas);
-    const center = planck.Vec2(world.x, world.y);
-    const bodies: planck.Body[] = [];
-
-    this.ctx.game.world.queryAABB(
-      planck.AABB(planck.Vec2(world.x - r, world.y - r), planck.Vec2(world.x + r, world.y + r)),
-      (fixture) => {
-        const body = fixture.getBody();
-        if (body === this.ctx.groundBody) return true;
-        if (planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), center)) < r) {
-          if (!bodies.includes(body)) bodies.push(body);
-        }
-        return true;
-      },
-    );
-
+  protected brushAction(bodies: planck.Body[]) {
     const GAP = 0.5;
     for (let i = 0; i < bodies.length; i++) {
       for (let j = i + 1; j < bodies.length; j++) {
@@ -54,39 +25,10 @@ export class GlueTool implements ToolHandler {
   }
 }
 
-export class UnGlueTool implements ToolHandler {
-  private ctx: ToolContext;
+export class UnGlueTool extends BrushTool {
+  readonly radiusPx = GLUE_RADIUS_PX;
 
-  constructor(ctx: ToolContext) {
-    this.ctx = ctx;
-  }
-
-  onDown(_wx: number, _wy: number, sx: number, sy: number) {
-    this.unglueAtScreen(sx, sy);
-  }
-
-  onBrush(_wx: number, _wy: number, sx: number, sy: number) {
-    this.unglueAtScreen(sx, sy);
-  }
-
-  private unglueAtScreen(sx: number, sy: number) {
-    const r = GLUE_RADIUS_PX / this.ctx.game.camera.zoom;
-    const world = this.ctx.game.camera.toWorld(sx, sy, this.ctx.game.canvas);
-    const center = planck.Vec2(world.x, world.y);
-    const bodies: planck.Body[] = [];
-
-    this.ctx.game.world.queryAABB(
-      planck.AABB(planck.Vec2(world.x - r, world.y - r), planck.Vec2(world.x + r, world.y + r)),
-      (fixture) => {
-        const body = fixture.getBody();
-        if (body === this.ctx.groundBody) return true;
-        if (planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), center)) < r) {
-          if (!bodies.includes(body)) bodies.push(body);
-        }
-        return true;
-      },
-    );
-
+  protected brushAction(bodies: planck.Body[]) {
     const toDestroy: planck.Joint[] = [];
     for (const body of bodies) {
       for (let je = body.getJointList(); je; je = je.next) {

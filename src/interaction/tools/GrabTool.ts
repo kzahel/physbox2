@@ -1,4 +1,5 @@
 import * as planck from "planck";
+import { findClosestBody } from "../../engine/Physics";
 import type { ToolContext, ToolHandler } from "../ToolHandler";
 
 export const GRAB_RADIUS_PX = 30;
@@ -46,40 +47,19 @@ export class GrabTool implements ToolHandler {
   }
 
   private startGrab(wx: number, wy: number, radiusPx = 5) {
-    // Clean up any existing grab before starting a new one
     this.onUp();
 
     const radius = radiusPx / this.ctx.game.camera.zoom;
-    const point = planck.Vec2(wx, wy);
-    let target: planck.Body | null = null;
-    let bestDist = Number.POSITIVE_INFINITY;
-
-    this.ctx.game.world.queryAABB(
-      planck.AABB(planck.Vec2(wx - radius, wy - radius), planck.Vec2(wx + radius, wy + radius)),
-      (fixture) => {
-        const body = fixture.getBody();
-        if (fixture.testPoint(point)) {
-          target = body;
-          bestDist = 0;
-          return false;
-        }
-        const d = planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), point));
-        if (d < bestDist) {
-          bestDist = d;
-          target = body;
-        }
-        return true;
-      },
-    );
+    const target = findClosestBody(this.ctx.game.world, wx, wy, radius);
 
     if (target) {
-      const t = target as planck.Body;
-      if (t.isDynamic()) {
+      const point = planck.Vec2(wx, wy);
+      if (target.isDynamic()) {
         this.mouseJoint = this.ctx.game.world.createJoint(
-          planck.MouseJoint({ maxForce: 1000 * t.getMass() }, this.ctx.groundBody, t, point),
+          planck.MouseJoint({ maxForce: 1000 * target.getMass() }, this.ctx.groundBody, target, point),
         ) as planck.MouseJoint;
       } else {
-        this.grabbedStatic = t;
+        this.grabbedStatic = target;
       }
     }
   }

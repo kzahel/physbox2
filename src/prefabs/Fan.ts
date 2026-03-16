@@ -60,6 +60,6 @@ export function applyFanForce(world: planck.World, renderer: Renderer): void {
       b.applyForceToCenter(planck.Vec2(dirX * f, dirY * f), true);
     }
 
-    renderer.spawnWind(pos.x, pos.y, angle, range);
+    renderer.particles.spawnWind(pos.x, pos.y, angle, range);
   }
 }

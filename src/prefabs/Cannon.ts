@@ -38,7 +38,7 @@ export function createCannon(
     const speed = 20;
     ball.setLinearVelocity(planck.Vec2(dirX * speed, dirY * speed));
 
-    renderer.spawnMuzzleFlash(spawnX, spawnY);
+    renderer.particles.spawnMuzzleFlash(spawnX, spawnY);
 
     let exploded = false;
     world.on("begin-contact", (contact) => {
