@@ -1,5 +1,6 @@
 import type * as planck from "planck";
 import type { Camera } from "./Camera";
+import { type InputManager, ERASE_RADIUS_PX } from "../interaction/InputManager";
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
@@ -96,6 +97,32 @@ export class Renderer {
 
     // Draw joints
     this.drawJoints(world, camera);
+
+    // Draw erase cursor
+    if (this.inputManager?.tool === "erase" && this.inputManager.eraseCursor) {
+      this.drawEraseCursor(this.inputManager.eraseCursor);
+    }
+  }
+
+  setInputManager(input: InputManager) {
+    this.inputManager = input;
+  }
+
+  private inputManager: InputManager | null = null;
+
+  private drawEraseCursor(pos: { x: number; y: number }) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, ERASE_RADIUS_PX, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255, 80, 80, 0.7)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255, 80, 80, 0.1)";
+    ctx.fill();
+    ctx.setLineDash([]);
+    ctx.restore();
   }
 
   private drawJoints(world: planck.World, camera: Camera) {

@@ -6,6 +6,7 @@ import { Toolbar } from "./ui/Toolbar";
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const game = new Game(canvas);
 const input = new InputManager(game);
+game.renderer.setInputManager(input);
 
 new Toolbar(document.getElementById("toolbar")!, input);
 new SettingsPane(document.getElementById("settings")!, game);

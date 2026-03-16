@@ -3,12 +3,17 @@ import type { Game } from "../engine/Game";
 
 export type Tool = "box" | "ball" | "platform" | "rope" | "grab" | "erase";
 
+export const ERASE_RADIUS_PX = 24; // CSS pixels
+
 export class InputManager {
   tool: Tool = "grab";
   private mouseJoint: planck.MouseJoint | null = null;
   private groundBody: planck.Body;
   private isPanning = false;
   private lastMouse = { x: 0, y: 0 };
+
+  // Erase cursor position (screen coords, null when not active)
+  eraseCursor: { x: number; y: number } | null = null;
 
   // Touch state
   private lastTouches: { id: number; x: number; y: number }[] = [];
@@ -90,7 +95,7 @@ export class InputManager {
         this.game.addChainRope(world.x, world.y, 8);
         break;
       case "erase":
-        this.game.destroyBodyAt(world.x, world.y);
+        this.eraseAtScreen(e.clientX, e.clientY);
         break;
     }
   }
@@ -99,6 +104,11 @@ export class InputManager {
     const dx = e.clientX - this.lastMouse.x;
     const dy = e.clientY - this.lastMouse.y;
     this.lastMouse = { x: e.clientX, y: e.clientY };
+
+    // Track erase cursor
+    if (this.tool === "erase") {
+      this.eraseCursor = { x: e.clientX, y: e.clientY };
+    }
 
     if (this.isPanning) {
       this.game.camera.pan(dx, dy);
@@ -111,8 +121,7 @@ export class InputManager {
     }
 
     if (this.tool === "erase" && e.buttons & 1) {
-      const world = this.game.camera.toWorld(e.clientX, e.clientY, this.game.canvas);
-      this.game.destroyBodyAt(world.x, world.y);
+      this.eraseAtScreen(e.clientX, e.clientY);
     }
   }
 
@@ -182,12 +191,17 @@ export class InputManager {
     this.lastTouches = this.snapTouches(e);
     this.touchToolFired = false;
 
-    // Single finger + grab tool → start grab (use larger hit radius for fat fingers)
-    if (e.touches.length === 1 && this.tool === "grab") {
+    if (e.touches.length === 1) {
       const t = e.touches[0];
-      const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
-      const touchRadius = 20 / this.game.camera.zoom; // ~20 CSS pixels in world units
-      this.startGrab(world.x, world.y, touchRadius);
+      if (this.tool === "grab") {
+        const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
+        const touchRadius = 20 / this.game.camera.zoom;
+        this.startGrab(world.x, world.y, touchRadius);
+      } else if (this.tool === "erase") {
+        this.eraseCursor = { x: t.clientX, y: t.clientY };
+        this.eraseAtScreen(t.clientX, t.clientY);
+        this.touchToolFired = true;
+      }
     }
   }
 
@@ -230,8 +244,8 @@ export class InputManager {
         const world = this.game.camera.toWorld(t.x, t.y, this.game.canvas);
         this.mouseJoint.setTarget(planck.Vec2(world.x, world.y));
       } else if (this.tool === "erase") {
-        const world = this.game.camera.toWorld(t.x, t.y, this.game.canvas);
-        this.game.destroyBodyAt(world.x, world.y);
+        this.eraseCursor = { x: t.x, y: t.y };
+        this.eraseAtScreen(t.x, t.y);
         this.touchToolFired = true;
       } else {
         // Single-finger pan (for placement tools, or grab tool when not holding a body)
@@ -267,10 +281,13 @@ export class InputManager {
           this.game.addChainRope(world.x, world.y, 8);
           break;
         case "erase":
-          this.game.destroyBodyAt(world.x, world.y);
+          this.eraseAtScreen(t.x, t.y);
           break;
       }
     }
+
+    // Clear erase cursor on touch end
+    if (e.touches.length === 0) this.eraseCursor = null;
 
     // Release grab
     if (e.touches.length === 0 && this.mouseJoint) {
@@ -281,8 +298,33 @@ export class InputManager {
     this.lastTouches = this.snapTouches(e);
   }
 
+  /** Erase all dynamic bodies within the erase cursor radius */
+  private eraseAtScreen(sx: number, sy: number) {
+    const r = ERASE_RADIUS_PX / this.game.camera.zoom; // world units
+    const world = this.game.camera.toWorld(sx, sy, this.game.canvas);
+    const center = planck.Vec2(world.x, world.y);
+    const toRemove: planck.Body[] = [];
+
+    this.game.world.queryAABB(
+      planck.AABB(
+        planck.Vec2(world.x - r, world.y - r),
+        planck.Vec2(world.x + r, world.y + r),
+      ),
+      (fixture) => {
+        const body = fixture.getBody();
+        if (!body.isDynamic()) return true;
+        const d = planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), center));
+        if (d < r) toRemove.push(body);
+        return true;
+      },
+    );
+
+    for (const b of toRemove) this.game.world.destroyBody(b);
+  }
+
   setTool(tool: Tool) {
     this.tool = tool;
+    if (tool !== "erase") this.eraseCursor = null;
     this.onToolChange?.(tool);
   }
 }
