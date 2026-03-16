@@ -21,7 +21,8 @@ export type Tool =
   | "seesaw"
   | "rocket"
   | "scale"
-  | "balloon";
+  | "balloon"
+  | "fan";
 
 export const ERASE_RADIUS_PX = 24; // CSS pixels
 export const GRAB_RADIUS_PX = 30; // CSS pixels — touch grab hit area
@@ -158,6 +159,7 @@ export class InputManager {
         this.game.addBalloon(world.x, world.y);
         break;
       case "conveyor":
+      case "fan":
         this.platformDraw = { start: { x: world.x, y: world.y }, end: { x: world.x, y: world.y } };
         break;
       case "dynamite":
@@ -308,7 +310,7 @@ export class InputManager {
         const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
         this.startScale(world.x, world.y, t.clientY);
         this.touchToolFired = true;
-      } else if (this.tool === "platform" || this.tool === "conveyor") {
+      } else if (this.tool === "platform" || this.tool === "conveyor" || this.tool === "fan") {
         const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
         this.platformDraw = { start: { x: world.x, y: world.y }, end: { x: world.x, y: world.y } };
         this.touchToolFired = true;
@@ -508,6 +510,8 @@ export class InputManager {
       const angle = Math.atan2(dy, dx);
       if (this.tool === "conveyor") {
         this.game.addConveyor(cx, cy, len, 3, angle);
+      } else if (this.tool === "fan") {
+        this.game.addFan(start.x, start.y, angle);
       } else {
         this.game.addPlatform(cx, cy, len, angle);
       }

@@ -156,9 +156,11 @@ export class Renderer {
       }
     }
 
-    // Draw platform/conveyor preview
+    // Draw platform/conveyor/fan preview
     if (this.inputManager?.platformDraw) {
-      const isConveyor = this.inputManager.tool === "conveyor";
+      const tool = this.inputManager.tool;
+      const isFan = tool === "fan";
+      const isConveyor = tool === "conveyor";
       const { start, end } = this.inputManager.platformDraw;
       const s = camera.toScreen(start.x, start.y, this.canvas);
       const e = camera.toScreen(end.x, end.y, this.canvas);
@@ -167,18 +169,42 @@ export class Renderer {
       ctx.beginPath();
       ctx.moveTo(s.x, s.y);
       ctx.lineTo(e.x, e.y);
-      ctx.strokeStyle = isConveyor ? "rgba(200, 160, 50, 0.9)" : "rgba(80, 100, 80, 0.9)";
-      ctx.lineWidth = Math.max(4, (isConveyor ? 0.4 : 0.3) * camera.zoom);
+      const color = isFan
+        ? "rgba(120, 180, 220, 0.9)"
+        : isConveyor
+          ? "rgba(200, 160, 50, 0.9)"
+          : "rgba(80, 100, 80, 0.9)";
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(4, 0.3 * camera.zoom);
       ctx.lineCap = "round";
       ctx.setLineDash([8, 6]);
       ctx.stroke();
       ctx.setLineDash([]);
       // Endpoint dots
-      ctx.fillStyle = isConveyor ? "rgba(200, 160, 50, 0.8)" : "rgba(120, 160, 120, 0.8)";
+      ctx.fillStyle = color;
       for (const p of [s, e]) {
         ctx.beginPath();
         ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
         ctx.fill();
+      }
+      // Fan: arrow at end to show direction
+      if (isFan) {
+        const dx = e.x - s.x;
+        const dy = e.y - s.y;
+        const len = Math.hypot(dx, dy);
+        if (len > 10) {
+          const nx = dx / len;
+          const ny = dy / len;
+          ctx.beginPath();
+          ctx.moveTo(e.x, e.y);
+          ctx.lineTo(e.x - nx * 12 - ny * 8, e.y - ny * 12 + nx * 8);
+          ctx.moveTo(e.x, e.y);
+          ctx.lineTo(e.x - nx * 12 + ny * 8, e.y - ny * 12 - nx * 8);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([]);
+          ctx.stroke();
+        }
       }
       ctx.restore();
     }
@@ -459,6 +485,32 @@ export class Renderer {
       ctx.fillStyle = "rgba(255,255,255,0.25)";
       ctx.fill();
       ctx.restore();
+    }
+  }
+
+  spawnWind(wx: number, wy: number, angle: number, range: number) {
+    const dirX = Math.cos(angle);
+    const dirY = Math.sin(angle);
+    // Spawn 1-2 particles per frame from the fan face
+    for (let i = 0; i < 2; i++) {
+      if (Math.random() > 0.6) continue;
+      const spread = (Math.random() - 0.5) * 1.5;
+      const perpX = -dirY * spread;
+      const perpY = dirX * spread;
+      const speed = 3 + Math.random() * 4;
+      const life = (range / speed) * (0.4 + Math.random() * 0.4);
+      this.particles.push({
+        x: wx + dirX * 0.5 + perpX,
+        y: wy + dirY * 0.5 + perpY,
+        vx: dirX * speed + (Math.random() - 0.5) * 0.5,
+        vy: dirY * speed + (Math.random() - 0.5) * 0.5,
+        life,
+        maxLife: life,
+        size: 0.06 + Math.random() * 0.08,
+        r: 180,
+        g: 210,
+        b: 240,
+      });
     }
   }
 
