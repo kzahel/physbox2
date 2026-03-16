@@ -479,8 +479,9 @@ export class Game {
       density: 0.5,
     });
 
-    const lift = 12 + r() * 8; // buoyancy force multiplier
-    body.setUserData({ fill: color, label: "balloon", lift });
+    const liftPerArea = 12 + r() * 8; // buoyancy force per unit area
+    const lift = liftPerArea * radius * radius;
+    body.setUserData({ fill: color, label: "balloon", lift, liftPerArea });
     return body;
   }
 
@@ -916,10 +917,20 @@ export class Game {
   private applyBalloonLift() {
     for (let b = this.world.getBodyList(); b; b = b.getNext()) {
       if (!b.isDynamic()) continue;
-      const ud = b.getUserData() as { label?: string; lift?: number } | null;
-      if (ud?.label !== "balloon" || !ud.lift) continue;
-      // Upward force opposing gravity
-      b.applyForceToCenter(planck.Vec2(0, ud.lift * b.getMass()), true);
+      const ud = b.getUserData() as { label?: string; lift?: number; liftPerArea?: number } | null;
+      if (ud?.label !== "balloon") continue;
+
+      // Compute lift from current radius (supports scaling)
+      let lift = ud.lift ?? 0;
+      if (ud.liftPerArea) {
+        const fixture = b.getFixtureList();
+        if (fixture && fixture.getShape().getType() === "circle") {
+          const r = (fixture.getShape() as planck.CircleShape).getRadius();
+          lift = ud.liftPerArea * r * r;
+        }
+      }
+      if (lift <= 0) continue;
+      b.applyForceToCenter(planck.Vec2(0, lift * b.getMass()), true);
     }
   }
 
