@@ -561,6 +561,27 @@ export class Renderer {
     }
   }
 
+  spawnMuzzleFlash(wx: number, wy: number) {
+    const count = 10;
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+      const speed = 1 + Math.random() * 3;
+      const life = 0.15 + Math.random() * 0.25;
+      this.particles.push({
+        x: wx,
+        y: wy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life,
+        maxLife: life,
+        size: 0.08 + Math.random() * 0.12,
+        r: 255,
+        g: 180 + Math.floor(Math.random() * 75),
+        b: 0,
+      });
+    }
+  }
+
   spawnExplosion(wx: number, wy: number) {
     const count = 40;
     for (let i = 0; i < count; i++) {
