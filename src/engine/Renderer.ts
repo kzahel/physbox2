@@ -1,5 +1,12 @@
 import type * as planck from "planck";
-import { ERASE_RADIUS_PX, GLUE_RADIUS_PX, GRAB_RADIUS_PX, type InputManager } from "../interaction/InputManager";
+import {
+  ERASE_RADIUS_PX,
+  GLUE_RADIUS_PX,
+  GRAB_RADIUS_PX,
+  hasMotor,
+  type InputManager,
+  isDirectional,
+} from "../interaction/InputManager";
 import type { Camera } from "./Camera";
 import { KILL_Y, KILL_Y_TOP } from "./Game";
 
@@ -268,12 +275,12 @@ export class Renderer {
       this.drawToggleButton(sp, body.isStatic());
       // Direction button for cars/conveyors
       let nextBtnY = 55;
-      if (this.inputManager.isDirectional(body)) {
+      if (isDirectional(body)) {
         this.drawDirectionButton(sp, nextBtnY);
         nextBtnY += 25;
       }
       // Motor button
-      this.drawMotorButton(sp, nextBtnY, this.inputManager.hasMotor(body));
+      this.drawMotorButton(sp, nextBtnY, hasMotor(body));
     }
   }
 

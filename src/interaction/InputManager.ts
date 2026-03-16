@@ -1,5 +1,24 @@
 import * as planck from "planck";
 import type { Game } from "../engine/Game";
+import { RagdollController } from "./RagdollController";
+import type { ToolContext, ToolHandler } from "./ToolHandler";
+import { AttachTool } from "./tools/AttachTool";
+import { AttractTool } from "./tools/AttractTool";
+import { CreationTool } from "./tools/CreationTool";
+import { DetachTool } from "./tools/DetachTool";
+import { EraseTool } from "./tools/EraseTool";
+import { GlueTool, UnGlueTool } from "./tools/GlueTool";
+import { GrabTool } from "./tools/GrabTool";
+import { PlatformDrawTool } from "./tools/PlatformDrawTool";
+import { RopeTool, SpringTool } from "./tools/RopeTool";
+import { ScaleTool } from "./tools/ScaleTool";
+import { SelectTool } from "./tools/SelectTool";
+
+// Re-export constants and helpers that Renderer needs
+export { ERASE_RADIUS_PX } from "./tools/EraseTool";
+export { GLUE_RADIUS_PX } from "./tools/GlueTool";
+export { GRAB_RADIUS_PX } from "./tools/GrabTool";
+export { hasMotor, isDirectional } from "./tools/SelectTool";
 
 export type Tool =
   | "box"
@@ -28,35 +47,20 @@ export type Tool =
   | "glue"
   | "unglue";
 
-export const ERASE_RADIUS_PX = 24; // CSS pixels
-export const GRAB_RADIUS_PX = 30; // CSS pixels — touch grab hit area
-export const GLUE_RADIUS_PX = 28; // CSS pixels — glue brush radius
+const CREATION_TOOL_IDS: Tool[] = [
+  "box",
+  "ball",
+  "car",
+  "springball",
+  "launcher",
+  "seesaw",
+  "balloon",
+  "ragdoll",
+  "dynamite",
+];
 
 export class InputManager {
   tool: Tool = "grab";
-  private mouseJoint: planck.MouseJoint | null = null;
-  private grabbedStatic: planck.Body | null = null;
-  private groundBody: planck.Body;
-  private isPanning = false;
-  private lastMouse = { x: 0, y: 0 };
-
-  // Attach tool state
-  attachPending: { body: planck.Body; world: { x: number; y: number } } | null = null;
-
-  // Attract tool state: pulling two bodies together before welding
-  attracting: { bodyA: planck.Body; bodyB: planck.Body } | null = null;
-
-  // Platform drawing state (world coords)
-  platformDraw: { start: { x: number; y: number }; end: { x: number; y: number } } | null = null;
-
-  // Select tool state
-  selectedBody: planck.Body | null = null;
-
-  // Rope tool state
-  ropePending: { body: planck.Body | null; x: number; y: number } | null = null;
-
-  // Scale tool state
-  scaleDrag: { body: planck.Body; startScreenY: number; currentScale: number } | null = null;
 
   // Multi-placement mode
   multiPlace = false;
@@ -65,22 +69,172 @@ export class InputManager {
   // Tool cursor position (screen coords, null when not active)
   toolCursor: { x: number; y: number } | null = null;
 
+  // Keyboard state
+  private keys = new Set<string>();
+  private game: Game;
+  private groundBody: planck.Body;
+
+  // Pan state
+  private isPanning = false;
+  private lastMouse = { x: 0, y: 0 };
+
   // Touch state
   private lastTouches: { id: number; x: number; y: number }[] = [];
   private touchToolFired = false;
 
-  // Keyboard state
-  private keys = new Set<string>();
-  private game: Game;
+  // Tool handlers
+  private handlers: Record<Tool, ToolHandler>;
+  private ragdollController: RagdollController;
+
+  // Typed accessors for tool-specific state (used by Renderer)
+  readonly grabTool: GrabTool;
+  readonly selectTool: SelectTool;
+  readonly attachTool: AttachTool;
+  readonly attractTool: AttractTool;
+  readonly scaleTool: ScaleTool;
+  readonly ropeTool: RopeTool;
+  readonly springTool: SpringTool;
+  readonly platformTools: Map<Tool, PlatformDrawTool>;
 
   onToolChange?: (tool: Tool) => void;
 
   constructor(game: Game) {
     this.game = game;
     this.groundBody = game.world.createBody({ type: "static" });
+
+    const ctx: ToolContext = {
+      game,
+      groundBody: this.groundBody,
+      findBodyAt: (wx, wy, radiusPx) => this.findBodyAt(wx, wy, radiusPx),
+    };
+
+    // Create tool handlers
+    this.grabTool = new GrabTool(ctx);
+    const eraseTool = new EraseTool(ctx);
+    const glueTool = new GlueTool(ctx);
+    const unGlueTool = new UnGlueTool(ctx);
+    this.attachTool = new AttachTool(ctx);
+    const detachTool = new DetachTool(ctx);
+    this.ropeTool = new RopeTool(ctx);
+    this.springTool = new SpringTool(ctx);
+    this.attractTool = new AttractTool(ctx);
+    this.selectTool = new SelectTool(ctx);
+    this.scaleTool = new ScaleTool(ctx);
+
+    // Platform-draw family
+    const platformTool = new PlatformDrawTool(ctx, "platform");
+    const conveyorTool = new PlatformDrawTool(ctx, "conveyor");
+    const fanTool = new PlatformDrawTool(ctx, "fan");
+    const cannonTool = new PlatformDrawTool(ctx, "cannon");
+    const rocketTool = new PlatformDrawTool(ctx, "rocket");
+    this.platformTools = new Map<Tool, PlatformDrawTool>([
+      ["platform", platformTool],
+      ["conveyor", conveyorTool],
+      ["fan", fanTool],
+      ["cannon", cannonTool],
+      ["rocket", rocketTool],
+    ]);
+
+    // Creation tools
+    const creationTools: Partial<Record<Tool, CreationTool>> = {};
+    for (const t of CREATION_TOOL_IDS) {
+      creationTools[t] = new CreationTool(ctx, t);
+    }
+
+    this.handlers = {
+      grab: this.grabTool,
+      erase: eraseTool,
+      glue: glueTool,
+      unglue: unGlueTool,
+      attach: this.attachTool,
+      detach: detachTool,
+      ropetool: this.ropeTool,
+      spring: this.springTool,
+      attract: this.attractTool,
+      select: this.selectTool,
+      scale: this.scaleTool,
+      platform: platformTool,
+      conveyor: conveyorTool,
+      fan: fanTool,
+      cannon: cannonTool,
+      rocket: rocketTool,
+      box: creationTools.box!,
+      ball: creationTools.ball!,
+      car: creationTools.car!,
+      springball: creationTools.springball!,
+      launcher: creationTools.launcher!,
+      seesaw: creationTools.seesaw!,
+      balloon: creationTools.balloon!,
+      ragdoll: creationTools.ragdoll!,
+      dynamite: creationTools.dynamite!,
+    };
+
+    this.ragdollController = new RagdollController(game, this.keys);
+    this.attractTool.ensureContactListener();
     this.bind();
-    this.bindContactListener();
   }
+
+  /** Current active tool handler */
+  private get handler(): ToolHandler {
+    return this.handlers[this.tool];
+  }
+
+  // ── Renderer-visible state accessors ──
+
+  get selectedBody() {
+    return this.selectTool.selectedBody;
+  }
+
+  set selectedBody(v) {
+    this.selectTool.selectedBody = v;
+  }
+
+  get attachPending() {
+    return this.attachTool.attachPending;
+  }
+
+  get ropePending(): { body: import("planck").Body | null; x: number; y: number } | null {
+    if (this.tool === "spring") return this.springTool.ropePending;
+    return this.ropeTool.ropePending;
+  }
+
+  get scaleDrag() {
+    return this.scaleTool.scaleDrag;
+  }
+
+  get attracting() {
+    return this.attractTool.attracting;
+  }
+
+  get platformDraw() {
+    const pt = this.platformTools.get(this.tool);
+    return pt?.platformDraw ?? null;
+  }
+
+  // ── Public methods ──
+
+  setTool(tool: Tool) {
+    this.handler.reset?.();
+    this.tool = tool;
+    this.onToolChange?.(tool);
+  }
+
+  update() {
+    this.ragdollController.update();
+    this.attractTool.update();
+  }
+
+  resetGroundBody() {
+    this.groundBody = this.game.world.createBody({ type: "static" });
+    // Update context for all handlers — handlers store a reference to the ctx object
+    // which has groundBody as a property, so we update the shared ctx
+    const ctx = (this.grabTool as unknown as { ctx: ToolContext }).ctx;
+    ctx.groundBody = this.groundBody;
+    this.attractTool.rebindContactListener();
+    this.attractTool.ensureContactListener();
+  }
+
+  // ── Event binding ──
 
   private bind() {
     const canvas = this.game.canvas;
@@ -91,7 +245,6 @@ export class InputManager {
     canvas.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
-    // Touch events for mobile
     canvas.addEventListener("touchstart", (e) => this.onTouchStart(e), { passive: false });
     canvas.addEventListener("touchmove", (e) => this.onTouchMove(e), { passive: false });
     canvas.addEventListener("touchend", (e) => this.onTouchEnd(e));
@@ -119,89 +272,18 @@ export class InputManager {
     tick();
   }
 
+  // ── Mouse events ──
+
   private onMouseDown(e: MouseEvent) {
     this.lastMouse = { x: e.clientX, y: e.clientY };
 
-    // Middle click or right click → pan
     if (e.button === 1 || e.button === 2) {
       this.isPanning = true;
       return;
     }
 
     const world = this.game.camera.toWorld(e.clientX, e.clientY, this.game.canvas);
-
-    switch (this.tool) {
-      case "grab":
-        this.startGrab(world.x, world.y);
-        break;
-      case "box":
-        this.game.addBox(world.x, world.y);
-        break;
-      case "ball":
-        this.game.addBall(world.x, world.y);
-        break;
-      case "platform":
-        this.platformDraw = { start: { x: world.x, y: world.y }, end: { x: world.x, y: world.y } };
-        break;
-      case "car":
-        this.game.addCar(world.x, world.y);
-        break;
-      case "springball":
-        this.game.addSpringBall(world.x, world.y);
-        break;
-      case "launcher":
-        this.game.addLauncher(world.x, world.y);
-        break;
-      case "seesaw":
-        this.game.addSeesaw(world.x, world.y);
-        break;
-      case "rocket":
-      case "balloon":
-        this.game.addBalloon(world.x, world.y);
-        break;
-      case "ragdoll":
-        this.game.addRagdoll(world.x, world.y);
-        break;
-      case "conveyor":
-      case "fan":
-      case "cannon":
-      case "rocket":
-        this.platformDraw = { start: { x: world.x, y: world.y }, end: { x: world.x, y: world.y } };
-        break;
-      case "dynamite":
-        this.game.addDynamite(world.x, world.y);
-        break;
-      case "erase":
-        this.eraseAtScreen(e.clientX, e.clientY);
-        break;
-      case "glue":
-        this.glueAtScreen(e.clientX, e.clientY);
-        break;
-      case "unglue":
-        this.unglueAtScreen(e.clientX, e.clientY);
-        break;
-      case "attach":
-        this.handleAttach(world.x, world.y);
-        break;
-      case "ropetool":
-        this.handleRopeTool(world.x, world.y);
-        break;
-      case "spring":
-        this.handleSpringTool(world.x, world.y);
-        break;
-      case "detach":
-        this.handleDetach(world.x, world.y);
-        break;
-      case "attract":
-        this.handleAttract(world.x, world.y);
-        break;
-      case "select":
-        this.handleSelect(world.x, world.y, e.clientX, e.clientY);
-        break;
-      case "scale":
-        this.startScale(world.x, world.y, e.clientY);
-        break;
-    }
+    this.handler.onDown?.(world.x, world.y, e.clientX, e.clientY);
     this.startMultiPlace();
   }
 
@@ -209,8 +291,6 @@ export class InputManager {
     const dx = e.clientX - this.lastMouse.x;
     const dy = e.clientY - this.lastMouse.y;
     this.lastMouse = { x: e.clientX, y: e.clientY };
-
-    // Track tool cursor for visual feedback
     this.toolCursor = { x: e.clientX, y: e.clientY };
 
     if (this.isPanning) {
@@ -218,47 +298,19 @@ export class InputManager {
       return;
     }
 
-    if (this.mouseJoint) {
-      const world = this.game.camera.toWorld(e.clientX, e.clientY, this.game.canvas);
-      this.mouseJoint.setTarget(planck.Vec2(world.x, world.y));
-    } else if (this.grabbedStatic) {
-      const wdx = dx / this.game.camera.zoom;
-      const wdy = -dy / this.game.camera.zoom;
-      const pos = this.grabbedStatic.getPosition();
-      this.grabbedStatic.setPosition(planck.Vec2(pos.x + wdx, pos.y + wdy));
-    }
+    const world = this.game.camera.toWorld(e.clientX, e.clientY, this.game.canvas);
+    this.handler.onMove?.(world.x, world.y, dx, dy, e.clientX, e.clientY);
 
-    if (this.tool === "erase" && e.buttons & 1) {
-      this.eraseAtScreen(e.clientX, e.clientY);
-    }
-    if (this.tool === "glue" && e.buttons & 1) {
-      this.glueAtScreen(e.clientX, e.clientY);
-    }
-    if (this.tool === "unglue" && e.buttons & 1) {
-      this.unglueAtScreen(e.clientX, e.clientY);
-    }
-
-    if (this.platformDraw) {
-      const world = this.game.camera.toWorld(e.clientX, e.clientY, this.game.canvas);
-      this.platformDraw.end = { x: world.x, y: world.y };
-    }
-
-    if (this.scaleDrag) {
-      const deltaY = this.scaleDrag.startScreenY - e.clientY;
-      this.scaleDrag.currentScale = Math.max(0.2, Math.min(5, 2 ** (deltaY / 150)));
+    // Brush tools: continuous application while dragging
+    if (e.buttons & 1) {
+      this.handler.onBrush?.(world.x, world.y, e.clientX, e.clientY);
     }
   }
 
   private onMouseUp(_e: MouseEvent) {
     this.isPanning = false;
     this.stopMultiPlace();
-    if (this.mouseJoint) {
-      this.game.world.destroyJoint(this.mouseJoint);
-      this.mouseJoint = null;
-    }
-    this.grabbedStatic = null;
-    this.finishPlatformDraw();
-    this.finishScale();
+    this.handler.onUp?.();
   }
 
   private onWheel(e: WheelEvent) {
@@ -267,48 +319,14 @@ export class InputManager {
     this.game.camera.zoomAt(e.clientX, e.clientY, factor, this.game.canvas);
   }
 
-  private startGrab(wx: number, wy: number, radiusPx = 5) {
-    const radius = radiusPx / this.game.camera.zoom;
-    const point = planck.Vec2(wx, wy);
-    let target: planck.Body | null = null;
-    let bestDist = Number.POSITIVE_INFINITY;
-
-    // Use a generous search area, then pick the closest body
-    this.game.world.queryAABB(
-      planck.AABB(planck.Vec2(wx - radius, wy - radius), planck.Vec2(wx + radius, wy + radius)),
-      (fixture) => {
-        const body = fixture.getBody();
-        // Exact hit: use immediately
-        if (fixture.testPoint(point)) {
-          target = body;
-          bestDist = 0;
-          return false;
-        }
-        // Proximity hit: pick closest body center within search area
-        const d = planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), point));
-        if (d < bestDist) {
-          bestDist = d;
-          target = body;
-        }
-        return true;
-      },
-    );
-
-    if (target) {
-      const t = target as planck.Body;
-      if (t.isDynamic()) {
-        this.mouseJoint = this.game.world.createJoint(
-          planck.MouseJoint({ maxForce: 1000 * t.getMass() }, this.groundBody, t, point),
-        ) as planck.MouseJoint;
-      } else {
-        // Static/kinematic: drag by directly moving position
-        this.grabbedStatic = t;
-      }
-    }
-  }
+  // ── Touch events ──
 
   private snapTouches(e: TouchEvent): { id: number; x: number; y: number }[] {
-    return Array.from(e.touches).map((t) => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
+    return Array.from(e.touches).map((t) => ({
+      id: t.identifier,
+      x: t.clientX,
+      y: t.clientY,
+    }));
   }
 
   private touchDist(a: { x: number; y: number }, b: { x: number; y: number }): number {
@@ -322,36 +340,24 @@ export class InputManager {
 
     if (e.touches.length === 1) {
       const t = e.touches[0];
+      this.toolCursor = { x: t.clientX, y: t.clientY };
+      const h = this.handler;
+
+      // Tools that need immediate touch-start action
       if (this.tool === "grab") {
-        this.toolCursor = { x: t.clientX, y: t.clientY };
         const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
-        this.startGrab(world.x, world.y, GRAB_RADIUS_PX);
+        h.onDown?.(world.x, world.y, t.clientX, t.clientY);
       } else if (this.tool === "scale") {
-        this.toolCursor = { x: t.clientX, y: t.clientY };
         const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
-        this.startScale(world.x, world.y, t.clientY);
+        h.onDown?.(world.x, world.y, t.clientX, t.clientY);
         this.touchToolFired = true;
-      } else if (
-        this.tool === "platform" ||
-        this.tool === "conveyor" ||
-        this.tool === "fan" ||
-        this.tool === "cannon" ||
-        this.tool === "rocket"
-      ) {
+      } else if (this.isPlatformDrawTool()) {
         const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
-        this.platformDraw = { start: { x: world.x, y: world.y }, end: { x: world.x, y: world.y } };
+        h.onDown?.(world.x, world.y, t.clientX, t.clientY);
         this.touchToolFired = true;
-      } else if (this.tool === "erase") {
-        this.toolCursor = { x: t.clientX, y: t.clientY };
-        this.eraseAtScreen(t.clientX, t.clientY);
-        this.touchToolFired = true;
-      } else if (this.tool === "glue") {
-        this.toolCursor = { x: t.clientX, y: t.clientY };
-        this.glueAtScreen(t.clientX, t.clientY);
-        this.touchToolFired = true;
-      } else if (this.tool === "unglue") {
-        this.toolCursor = { x: t.clientX, y: t.clientY };
-        this.unglueAtScreen(t.clientX, t.clientY);
+      } else if (this.isBrushTool()) {
+        const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.canvas);
+        h.onDown?.(world.x, world.y, t.clientX, t.clientY);
         this.touchToolFired = true;
       }
     }
@@ -362,30 +368,23 @@ export class InputManager {
     const cur = this.snapTouches(e);
 
     if (cur.length >= 2 && this.lastTouches.length >= 2) {
-      // Two-finger gesture detected — suppress tool placement on release
+      // Two-finger gesture — cancel tool, do pan+zoom
       this.touchToolFired = true;
-      // Release any grab when second finger comes in
-      if (this.mouseJoint) {
-        this.game.world.destroyJoint(this.mouseJoint);
-        this.mouseJoint = null;
-      }
-      this.grabbedStatic = null;
-      this.scaleDrag = null;
+      this.grabTool.releaseGrab();
+      this.scaleTool.scaleDrag = null;
       this.stopMultiPlace();
-      this.platformDraw = null;
+      const pt = this.platformTools.get(this.tool);
+      if (pt) pt.platformDraw = null;
 
-      // Two-finger pan + pinch zoom
       const prevA = this.lastTouches[0];
       const prevB = this.lastTouches[1];
       const curA = cur[0];
       const curB = cur[1];
 
-      // Pan: average movement of both fingers
       const dx = (curA.x + curB.x - prevA.x - prevB.x) / 2;
       const dy = (curA.y + curB.y - prevA.y - prevB.y) / 2;
       this.game.camera.pan(dx, dy);
 
-      // Pinch zoom
       const prevDist = this.touchDist(prevA, prevB);
       const curDist = this.touchDist(curA, curB);
       if (prevDist > 0) {
@@ -395,43 +394,25 @@ export class InputManager {
       }
     } else if (cur.length === 1 && this.lastTouches.length >= 1) {
       const t = cur[0];
+      this.toolCursor = { x: t.x, y: t.y };
+      const world = this.game.camera.toWorld(t.x, t.y, this.game.canvas);
+      const prev = this.lastTouches.find((lt) => lt.id === t.id) ?? this.lastTouches[0];
+      const dx = t.x - prev.x;
+      const dy = t.y - prev.y;
 
-      if (this.mouseJoint) {
-        // Dragging a grabbed dynamic object
-        const world = this.game.camera.toWorld(t.x, t.y, this.game.canvas);
-        this.mouseJoint.setTarget(planck.Vec2(world.x, world.y));
-      } else if (this.grabbedStatic) {
-        const prev = this.lastTouches.find((lt) => lt.id === t.id) ?? this.lastTouches[0];
-        const tdx = (t.x - prev.x) / this.game.camera.zoom;
-        const tdy = -(t.y - prev.y) / this.game.camera.zoom;
-        const pos = this.grabbedStatic.getPosition();
-        this.grabbedStatic.setPosition(planck.Vec2(pos.x + tdx, pos.y + tdy));
-      } else if (this.scaleDrag) {
-        this.toolCursor = { x: t.x, y: t.y };
-        const deltaY = this.scaleDrag.startScreenY - t.y;
-        this.scaleDrag.currentScale = Math.max(0.2, Math.min(5, 2 ** (deltaY / 150)));
-      } else if (this.tool === "erase") {
-        this.toolCursor = { x: t.x, y: t.y };
-        this.eraseAtScreen(t.x, t.y);
+      const h = this.handler;
+
+      if (this.tool === "grab" || this.tool === "scale") {
+        h.onMove?.(world.x, world.y, dx, dy, t.x, t.y);
+      } else if (this.isBrushTool()) {
+        h.onBrush?.(world.x, world.y, t.x, t.y);
         this.touchToolFired = true;
-      } else if (this.tool === "glue") {
-        this.toolCursor = { x: t.x, y: t.y };
-        this.glueAtScreen(t.x, t.y);
-        this.touchToolFired = true;
-      } else if (this.tool === "unglue") {
-        this.toolCursor = { x: t.x, y: t.y };
-        this.unglueAtScreen(t.x, t.y);
-        this.touchToolFired = true;
-      } else if (this.platformDraw) {
-        const world = this.game.camera.toWorld(t.x, t.y, this.game.canvas);
-        this.platformDraw.end = { x: world.x, y: world.y };
+      } else if (this.isPlatformDrawTool()) {
+        h.onMove?.(world.x, world.y, dx, dy, t.x, t.y);
       } else if (this.multiPlaceInterval) {
         this.lastMouse = { x: t.x, y: t.y };
-      } else if (this.multiPlace && this.CREATION_TOOLS.has(this.tool)) {
-        // Start multi-place on first single-finger move (not touchstart)
-        // to avoid placing when user intends to two-finger pan
-        const world = this.game.camera.toWorld(t.x, t.y, this.game.canvas);
-        this.placeCreationTool(world.x, world.y);
+      } else if (this.multiPlace && this.handler.isCreationTool) {
+        h.onDown?.(world.x, world.y, t.x, t.y);
         this.lastMouse = { x: t.x, y: t.y };
         this.startMultiPlace();
         this.touchToolFired = true;
@@ -442,252 +423,51 @@ export class InputManager {
   }
 
   private onTouchEnd(e: TouchEvent) {
-    // Fire tool action on single-finger tap (touchstart → touchend with no significant move)
+    // Single-finger tap — fire tool
     if (e.touches.length === 0 && this.lastTouches.length === 1 && !this.touchToolFired) {
       const t = this.lastTouches[0];
       const world = this.game.camera.toWorld(t.x, t.y, this.game.canvas);
-
-      switch (this.tool) {
-        case "box":
-          this.game.addBox(world.x, world.y);
-          break;
-        case "ball":
-          this.game.addBall(world.x, world.y);
-          break;
-        case "car":
-          this.game.addCar(world.x, world.y);
-          break;
-        case "springball":
-          this.game.addSpringBall(world.x, world.y);
-          break;
-        case "launcher":
-          this.game.addLauncher(world.x, world.y);
-          break;
-        case "seesaw":
-          this.game.addSeesaw(world.x, world.y);
-          break;
-        case "balloon":
-          this.game.addBalloon(world.x, world.y);
-          break;
-        case "ragdoll":
-          this.game.addRagdoll(world.x, world.y);
-          break;
-        case "dynamite":
-          this.game.addDynamite(world.x, world.y);
-          break;
-        case "erase":
-          this.eraseAtScreen(t.x, t.y);
-          break;
-        case "glue":
-          this.glueAtScreen(t.x, t.y);
-          break;
-        case "unglue":
-          this.unglueAtScreen(t.x, t.y);
-          break;
-        case "attach": {
-          this.handleAttach(world.x, world.y);
-          break;
-        }
-        case "ropetool":
-          this.handleRopeTool(world.x, world.y);
-          break;
-        case "spring":
-          this.handleSpringTool(world.x, world.y);
-          break;
-        case "detach":
-          this.handleDetach(world.x, world.y);
-          break;
-        case "attract":
-          this.handleAttract(world.x, world.y);
-          break;
-        case "select":
-          this.handleSelect(world.x, world.y, t.x, t.y);
-          break;
-      }
+      this.handler.onDown?.(world.x, world.y, t.x, t.y);
     }
 
-    // Finish platform draw / stop multi-place / apply scale on touch end
     if (e.touches.length === 0) {
-      this.finishPlatformDraw();
-      this.finishScale();
+      this.handler.onUp?.();
       this.stopMultiPlace();
-    }
-
-    // Clear erase cursor on touch end
-    if (e.touches.length === 0) this.toolCursor = null;
-
-    // Release grab
-    if (e.touches.length === 0) {
-      if (this.mouseJoint) {
-        this.game.world.destroyJoint(this.mouseJoint);
-        this.mouseJoint = null;
-      }
-      this.grabbedStatic = null;
+      this.toolCursor = null;
+      this.grabTool.releaseGrab();
     }
 
     this.lastTouches = this.snapTouches(e);
   }
 
-  /** Erase all bodies within the erase cursor radius */
-  private eraseAtScreen(sx: number, sy: number) {
-    const r = ERASE_RADIUS_PX / this.game.camera.zoom; // world units
-    const world = this.game.camera.toWorld(sx, sy, this.game.canvas);
-    const center = planck.Vec2(world.x, world.y);
-    const toRemove: planck.Body[] = [];
+  // ── Multi-place ──
 
-    this.game.world.queryAABB(
-      planck.AABB(planck.Vec2(world.x - r, world.y - r), planck.Vec2(world.x + r, world.y + r)),
-      (fixture) => {
-        const body = fixture.getBody();
-        if (body === this.groundBody) return true;
-        const d = planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), center));
-        if (d < r) toRemove.push(body);
-        return true;
-      },
-    );
-
-    for (const b of toRemove) this.game.world.destroyBody(b);
+  private startMultiPlace() {
+    if (!this.multiPlace || !this.handler.isCreationTool) return;
+    this.stopMultiPlace();
+    this.multiPlaceInterval = setInterval(() => {
+      const world = this.game.camera.toWorld(this.lastMouse.x, this.lastMouse.y, this.game.canvas);
+      this.handler.onDown?.(world.x, world.y, this.lastMouse.x, this.lastMouse.y);
+    }, 100);
   }
 
-  /** Glue: weld all nearby body pairs within brush radius */
-  private glueAtScreen(sx: number, sy: number) {
-    const r = GLUE_RADIUS_PX / this.game.camera.zoom;
-    const world = this.game.camera.toWorld(sx, sy, this.game.canvas);
-    const center = planck.Vec2(world.x, world.y);
-    const bodies: planck.Body[] = [];
-
-    this.game.world.queryAABB(
-      planck.AABB(planck.Vec2(world.x - r, world.y - r), planck.Vec2(world.x + r, world.y + r)),
-      (fixture) => {
-        const body = fixture.getBody();
-        if (body === this.groundBody) return true;
-        if (planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), center)) < r) {
-          if (!bodies.includes(body)) bodies.push(body);
-        }
-        return true;
-      },
-    );
-
-    // Weld pairs that are close together (gap < 0.5m)
-    const GAP = 0.5;
-    for (let i = 0; i < bodies.length; i++) {
-      for (let j = i + 1; j < bodies.length; j++) {
-        const a = bodies[i];
-        const b = bodies[j];
-        // Skip if already welded
-        if (this.areWelded(a, b)) continue;
-        const dist = planck.Vec2.lengthOf(planck.Vec2.sub(a.getPosition(), b.getPosition()));
-        // Use sum of rough radii + gap threshold
-        const rA = this.bodyRadius(a);
-        const rB = this.bodyRadius(b);
-        if (dist < rA + rB + GAP) {
-          const mid = planck.Vec2.mid(a.getPosition(), b.getPosition());
-          this.game.world.createJoint(planck.WeldJoint({}, a, b, mid));
-        }
-      }
+  private stopMultiPlace() {
+    if (this.multiPlaceInterval) {
+      clearInterval(this.multiPlaceInterval);
+      this.multiPlaceInterval = null;
     }
   }
 
-  private areWelded(a: planck.Body, b: planck.Body): boolean {
-    for (let je = a.getJointList(); je; je = je.next) {
-      const joint = je.joint;
-      if (!joint || joint.getType() !== "weld-joint") continue;
-      const other = joint.getBodyA() === a ? joint.getBodyB() : joint.getBodyA();
-      if (other === b) return true;
-    }
-    return false;
+  // ── Helpers ──
+
+  private isBrushTool(): boolean {
+    return this.tool === "erase" || this.tool === "glue" || this.tool === "unglue";
   }
 
-  private bodyRadius(body: planck.Body): number {
-    let maxR = 0;
-    for (let f = body.getFixtureList(); f; f = f.getNext()) {
-      const shape = f.getShape();
-      if (shape.getType() === "circle") {
-        maxR = Math.max(maxR, (shape as planck.CircleShape).getRadius());
-      } else if (shape.getType() === "polygon") {
-        // Use half the AABB diagonal as rough radius
-        const aabb = new planck.AABB();
-        shape.computeAABB(aabb, planck.Transform.identity(), 0);
-        const ext = planck.Vec2.sub(aabb.upperBound, aabb.lowerBound);
-        maxR = Math.max(maxR, planck.Vec2.lengthOf(ext) / 2);
-      }
-    }
-    return maxR;
+  private isPlatformDrawTool(): boolean {
+    return this.platformTools.has(this.tool);
   }
 
-  /** Unglue: remove all weld joints from bodies within brush radius */
-  private unglueAtScreen(sx: number, sy: number) {
-    const r = GLUE_RADIUS_PX / this.game.camera.zoom;
-    const world = this.game.camera.toWorld(sx, sy, this.game.canvas);
-    const center = planck.Vec2(world.x, world.y);
-    const bodies: planck.Body[] = [];
-
-    this.game.world.queryAABB(
-      planck.AABB(planck.Vec2(world.x - r, world.y - r), planck.Vec2(world.x + r, world.y + r)),
-      (fixture) => {
-        const body = fixture.getBody();
-        if (body === this.groundBody) return true;
-        if (planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), center)) < r) {
-          if (!bodies.includes(body)) bodies.push(body);
-        }
-        return true;
-      },
-    );
-
-    const toDestroy: planck.Joint[] = [];
-    for (const body of bodies) {
-      for (let je = body.getJointList(); je; je = je.next) {
-        const joint = je.joint;
-        if (!joint || joint.getType() !== "weld-joint") continue;
-        if (!toDestroy.includes(joint)) toDestroy.push(joint);
-      }
-    }
-    for (const j of toDestroy) this.game.world.destroyJoint(j);
-  }
-
-  private finishPlatformDraw() {
-    if (!this.platformDraw) return;
-    const { start, end } = this.platformDraw;
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const len = Math.hypot(dx, dy);
-    if (len > 0.3) {
-      const cx = (start.x + end.x) / 2;
-      const cy = (start.y + end.y) / 2;
-      const angle = Math.atan2(dy, dx);
-      if (this.tool === "conveyor") {
-        this.game.addConveyor(cx, cy, len, 3, angle);
-      } else if (this.tool === "fan") {
-        this.game.addFan(start.x, start.y, angle);
-      } else if (this.tool === "cannon") {
-        this.game.addCannon(start.x, start.y, angle);
-      } else if (this.tool === "rocket") {
-        // Rocket angle: drag direction maps to thrust direction (rocket's "up")
-        // The rocket's "up" is at angle + π/2, so subtract π/2 to align
-        this.game.addRocket(start.x, start.y, angle - Math.PI / 2);
-      } else {
-        this.game.addPlatform(cx, cy, len, angle);
-      }
-    }
-    this.platformDraw = null;
-  }
-
-  private startScale(wx: number, wy: number, screenY: number) {
-    const body = this.findBodyAt(wx, wy, 20);
-    if (body) {
-      this.scaleDrag = { body, startScreenY: screenY, currentScale: 1 };
-    }
-  }
-
-  private finishScale() {
-    if (!this.scaleDrag) return;
-    const { body, currentScale } = this.scaleDrag;
-    this.scaleDrag = null;
-    if (Math.abs(currentScale - 1) < 0.05) return;
-    this.game.scaleBody(body, currentScale);
-  }
-
-  /** Find the nearest body at world coords */
   private findBodyAt(wx: number, wy: number, radiusPx = 10): planck.Body | null {
     const radius = radiusPx / this.game.camera.zoom;
     const point = planck.Vec2(wx, wy);
@@ -713,321 +493,5 @@ export class InputManager {
     );
 
     return target;
-  }
-
-  /** Handle rope tool: two clicks to create a rope between points/bodies */
-  private handleRopeTool(wx: number, wy: number) {
-    const body = this.findBodyAt(wx, wy);
-
-    if (!this.ropePending) {
-      this.ropePending = { body, x: wx, y: wy };
-    } else {
-      const a = this.ropePending;
-      if (!(a.body && a.body === body)) {
-        this.game.addRopeBetween(a.x, a.y, wx, wy, a.body, body);
-      }
-      this.ropePending = null;
-    }
-  }
-
-  private handleSpringTool(wx: number, wy: number) {
-    const body = this.findBodyAt(wx, wy);
-
-    if (!this.ropePending) {
-      this.ropePending = { body, x: wx, y: wy };
-    } else {
-      const a = this.ropePending;
-      if (!(a.body && a.body === body)) {
-        this.game.addSpring(a.x, a.y, wx, wy, a.body, body);
-      }
-      this.ropePending = null;
-    }
-  }
-
-  /** Handle attach tool click: first click selects, second click welds */
-  private handleAttach(wx: number, wy: number) {
-    const body = this.findBodyAt(wx, wy);
-    if (!body) return;
-
-    if (!this.attachPending) {
-      // First click: select body
-      this.attachPending = { body, world: { x: wx, y: wy } };
-    } else {
-      // Second click: attach to first body
-      if (body !== this.attachPending.body) {
-        const midX = (this.attachPending.world.x + wx) / 2;
-        const midY = (this.attachPending.world.y + wy) / 2;
-        this.game.world.createJoint(planck.WeldJoint({}, this.attachPending.body, body, planck.Vec2(midX, midY)));
-      }
-      this.attachPending = null;
-    }
-  }
-
-  /** Remove all weld joints from a clicked body */
-  private handleDetach(wx: number, wy: number) {
-    const body = this.findBodyAt(wx, wy);
-    if (!body) return;
-
-    const toRemove: planck.Joint[] = [];
-    for (let j = this.game.world.getJointList(); j; j = j.getNext()) {
-      if (j.getType() === "weld-joint" && (j.getBodyA() === body || j.getBodyB() === body)) {
-        toRemove.push(j);
-      }
-    }
-    for (const j of toRemove) this.game.world.destroyJoint(j);
-  }
-
-  /** Handle attract tool: select two bodies, pull them together with a spring, weld on contact */
-  private handleAttract(wx: number, wy: number) {
-    // If already attracting, cancel on any click
-    if (this.attracting) {
-      this.cancelAttract();
-      return;
-    }
-
-    const body = this.findBodyAt(wx, wy);
-    if (!body) return;
-
-    if (!this.attachPending) {
-      this.attachPending = { body, world: { x: wx, y: wy } };
-    } else {
-      if (body !== this.attachPending.body) {
-        this.attracting = { bodyA: this.attachPending.body, bodyB: body };
-      }
-      this.attachPending = null;
-    }
-  }
-
-  private cancelAttract() {
-    this.attracting = null;
-  }
-
-  /** Apply per-frame forces (attraction, ragdoll control) */
-  update() {
-    this.updateRagdolls();
-    if (!this.attracting) return;
-    const { bodyA, bodyB } = this.attracting;
-    const dir = planck.Vec2.sub(bodyA.getPosition(), bodyB.getPosition());
-    const len = planck.Vec2.lengthOf(dir);
-    if (len < 0.01) return;
-    const force = planck.Vec2.mul(dir, (50 * bodyB.getMass()) / len);
-    bodyB.applyForceToCenter(force, true);
-    if (bodyA.isDynamic()) {
-      bodyA.applyForceToCenter(planck.Vec2.mul(force, -1), true);
-    }
-  }
-
-  private updateRagdolls() {
-    const moveForce = 8;
-    const jumpImpulse = 6;
-    const maxSpeed = 6;
-
-    const left = this.keys.has("ArrowLeft");
-    const right = this.keys.has("ArrowRight");
-    const jump = this.keys.has("ArrowUp");
-
-    for (const rd of this.game.ragdolls) {
-      const torso = rd.torso;
-      if (!torso.isActive()) continue;
-      const vel = torso.getLinearVelocity();
-      const grounded = rd.footContacts > 0;
-
-      // Horizontal movement
-      if (left && vel.x > -maxSpeed) {
-        torso.applyForceToCenter(planck.Vec2(-moveForce * torso.getMass(), 0), true);
-      }
-      if (right && vel.x < maxSpeed) {
-        torso.applyForceToCenter(planck.Vec2(moveForce * torso.getMass(), 0), true);
-      }
-
-      // Jump
-      if (jump && grounded && vel.y < 1) {
-        torso.applyLinearImpulse(planck.Vec2(0, jumpImpulse * torso.getMass()), torso.getPosition(), true);
-      }
-    }
-  }
-
-  private bindContactListener() {
-    this.game.world.on("begin-contact", (contact) => {
-      if (!this.attracting) return;
-      const { bodyA, bodyB } = this.attracting;
-      const cA = contact.getFixtureA().getBody();
-      const cB = contact.getFixtureB().getBody();
-      const match = (cA === bodyA && cB === bodyB) || (cA === bodyB && cB === bodyA);
-      if (!match) return;
-
-      const manifold = contact.getWorldManifold(null);
-      const weldPoint = manifold?.points[0] ?? bodyA.getPosition();
-      // Defer joint creation to after physics step
-      setTimeout(() => {
-        if (!this.attracting) return;
-        this.game.world.createJoint(planck.WeldJoint({}, bodyA, bodyB, weldPoint));
-        this.attracting = null;
-      }, 0);
-    });
-  }
-
-  private getBodyLabel(body: planck.Body): string | undefined {
-    return (body.getUserData() as { label?: string } | null)?.label;
-  }
-
-  isDirectional(body: planck.Body): boolean {
-    const label = this.getBodyLabel(body);
-    return label === "car" || label === "conveyor" || label === "rocket" || this.hasMotor(body);
-  }
-
-  hasMotor(body: planck.Body): boolean {
-    const ud = body.getUserData() as { motorSpeed?: number } | null;
-    return ud != null && ud.motorSpeed != null;
-  }
-
-  private handleSelect(wx: number, wy: number, sx: number, sy: number) {
-    if (this.selectedBody) {
-      const pos = this.selectedBody.getPosition();
-      const sp = this.game.camera.toScreen(pos.x, pos.y, this.game.canvas);
-
-      // Fixed/Free button
-      const btnY = sp.y - 30;
-      if (Math.abs(sx - sp.x) < 40 && Math.abs(sy - btnY) < 14) {
-        const isStatic = this.selectedBody.isStatic();
-        this.selectedBody.setType(isStatic ? "dynamic" : "static");
-        return;
-      }
-
-      // Direction button (below fixed/free, only for directional bodies)
-      let nextY = sp.y - 55;
-      if (this.isDirectional(this.selectedBody)) {
-        if (Math.abs(sx - sp.x) < 40 && Math.abs(sy - nextY) < 14) {
-          this.reverseDirection(this.selectedBody);
-          return;
-        }
-        nextY -= 25;
-      }
-
-      // Motor button
-      if (Math.abs(sx - sp.x) < 40 && Math.abs(sy - nextY) < 14) {
-        this.toggleMotor(this.selectedBody);
-        return;
-      }
-    }
-    const body = this.findBodyAt(wx, wy);
-    this.selectedBody = body;
-  }
-
-  private reverseDirection(body: planck.Body) {
-    const label = this.getBodyLabel(body);
-    if (label === "car") {
-      // Reverse all wheel joints attached to this body
-      for (let j = this.game.world.getJointList(); j; j = j.getNext()) {
-        if (j.getType() === "wheel-joint" && (j.getBodyA() === body || j.getBodyB() === body)) {
-          const wj = j as planck.WheelJoint;
-          wj.setMotorSpeed(-wj.getMotorSpeed());
-        }
-      }
-    } else if (label === "conveyor") {
-      const ud = body.getUserData() as { speed?: number } | null;
-      if (ud && ud.speed != null) {
-        ud.speed = -ud.speed;
-      }
-    } else if (label === "rocket") {
-      const ud = body.getUserData() as { thrust?: number } | null;
-      if (ud && ud.thrust != null) {
-        ud.thrust = -ud.thrust;
-      }
-    }
-    // Reverse motor
-    const mud = body.getUserData() as { motorSpeed?: number } | null;
-    if (mud && mud.motorSpeed != null) {
-      mud.motorSpeed = -mud.motorSpeed;
-    }
-  }
-
-  private toggleMotor(body: planck.Body) {
-    const ud = body.getUserData() as { motorSpeed?: number } | null;
-    if (ud && ud.motorSpeed != null) {
-      // Remove motor
-      delete ud.motorSpeed;
-    } else {
-      // Add motor — store speed on userData, torque applied each frame
-      if (body.isStatic()) body.setType("dynamic");
-      const data = (body.getUserData() ?? {}) as Record<string, unknown>;
-      data.motorSpeed = 5;
-      body.setUserData(data);
-      body.setAwake(true);
-    }
-  }
-
-  private readonly CREATION_TOOLS = new Set<Tool>([
-    "box",
-    "ball",
-    "car",
-    "springball",
-    "dynamite",
-    "balloon",
-    "ragdoll",
-    "seesaw",
-    "launcher",
-  ]);
-
-  private startMultiPlace() {
-    if (!this.multiPlace || !this.CREATION_TOOLS.has(this.tool)) return;
-    this.stopMultiPlace();
-    this.multiPlaceInterval = setInterval(() => {
-      const world = this.game.camera.toWorld(this.lastMouse.x, this.lastMouse.y, this.game.canvas);
-      this.placeCreationTool(world.x, world.y);
-    }, 100);
-  }
-
-  private stopMultiPlace() {
-    if (this.multiPlaceInterval) {
-      clearInterval(this.multiPlaceInterval);
-      this.multiPlaceInterval = null;
-    }
-  }
-
-  private placeCreationTool(wx: number, wy: number) {
-    switch (this.tool) {
-      case "box":
-        this.game.addBox(wx, wy);
-        break;
-      case "ball":
-        this.game.addBall(wx, wy);
-        break;
-      case "car":
-        this.game.addCar(wx, wy);
-        break;
-      case "springball":
-        this.game.addSpringBall(wx, wy);
-        break;
-      case "dynamite":
-        this.game.addDynamite(wx, wy);
-        break;
-      case "balloon":
-        this.game.addBalloon(wx, wy);
-        break;
-      case "ragdoll":
-        this.game.addRagdoll(wx, wy);
-        break;
-      case "seesaw":
-        this.game.addSeesaw(wx, wy);
-        break;
-      case "launcher":
-        this.game.addLauncher(wx, wy);
-        break;
-    }
-  }
-
-  resetGroundBody() {
-    this.groundBody = this.game.world.createBody({ type: "static" });
-  }
-
-  setTool(tool: Tool) {
-    this.tool = tool;
-    this.attachPending = null;
-    this.selectedBody = null;
-    this.ropePending = null;
-    this.scaleDrag = null;
-    this.cancelAttract();
-    this.onToolChange?.(tool);
   }
 }
