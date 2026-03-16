@@ -40,7 +40,7 @@ export class SettingsPane {
 
     const itersSlider = container.querySelector<HTMLInputElement>("#s-iters")!;
     itersSlider.addEventListener("input", () => {
-      const v = parseInt(itersSlider.value);
+      const v = parseInt(itersSlider.value, 10);
       game.positionIterations = v;
       game.velocityIterations = Math.max(v * 2, 4);
     });

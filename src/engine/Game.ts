@@ -136,7 +136,13 @@ export class Game {
     for (let i = 1; i < links; i++) {
       const lx = x1 + stepX * i;
       const ly = y1 + stepY * i;
-      const link = this.world.createBody({ type: "dynamic", position: planck.Vec2(lx, ly), angle, linearDamping: 0.5, angularDamping: 2 });
+      const link = this.world.createBody({
+        type: "dynamic",
+        position: planck.Vec2(lx, ly),
+        angle,
+        linearDamping: 0.5,
+        angularDamping: 2,
+      });
       link.createFixture({ shape: planck.Box(0.08, linkLen / 2), density: 2, friction: 0.4 });
       link.setUserData({ fill: "rgba(180,160,120,0.7)" });
 
@@ -309,11 +315,7 @@ export class Game {
     // Triangular fulcrum (static)
     const fulcrum = this.world.createBody({ type: "static", position: planck.Vec2(x, y) });
     fulcrum.createFixture({
-      shape: planck.Polygon([
-        planck.Vec2(-0.6, 0),
-        planck.Vec2(0.6, 0),
-        planck.Vec2(0, 0.8),
-      ]),
+      shape: planck.Polygon([planck.Vec2(-0.6, 0), planck.Vec2(0.6, 0), planck.Vec2(0, 0.8)]),
       friction: 0.5,
     });
     fulcrum.setUserData({ fill: "rgba(140,120,100,0.9)" });
@@ -335,28 +337,16 @@ export class Game {
     body.createFixture({ shape: planck.Box(0.3, 0.8), density: 1.5, friction: 0.3 });
     // Nose cone
     body.createFixture({
-      shape: planck.Polygon([
-        planck.Vec2(-0.3, 0.8),
-        planck.Vec2(0.3, 0.8),
-        planck.Vec2(0, 1.4),
-      ]),
+      shape: planck.Polygon([planck.Vec2(-0.3, 0.8), planck.Vec2(0.3, 0.8), planck.Vec2(0, 1.4)]),
       density: 0.5,
     });
     // Fins
     body.createFixture({
-      shape: planck.Polygon([
-        planck.Vec2(-0.3, -0.8),
-        planck.Vec2(-0.7, -1.0),
-        planck.Vec2(-0.3, -0.3),
-      ]),
+      shape: planck.Polygon([planck.Vec2(-0.3, -0.8), planck.Vec2(-0.7, -1.0), planck.Vec2(-0.3, -0.3)]),
       density: 0.3,
     });
     body.createFixture({
-      shape: planck.Polygon([
-        planck.Vec2(0.3, -0.8),
-        planck.Vec2(0.7, -1.0),
-        planck.Vec2(0.3, -0.3),
-      ]),
+      shape: planck.Polygon([planck.Vec2(0.3, -0.8), planck.Vec2(0.7, -1.0), planck.Vec2(0.3, -0.3)]),
       density: 0.3,
     });
     body.setUserData({ fill: "rgba(200,200,220,0.9)", label: "rocket", thrust: 40 });
