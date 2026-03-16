@@ -302,6 +302,73 @@ export class Game {
     return chassis;
   }
 
+  addConveyor(x: number, y: number, w = 6, speed = 3) {
+    const body = this.world.createBody({ type: "kinematic", position: planck.Vec2(x, y) });
+    const fixture = body.createFixture({ shape: planck.Box(w / 2, 0.2), friction: 1 });
+    fixture.setUserData({ fill: "rgba(200,160,50,0.8)", stroke: "rgba(200,160,50,0.5)" });
+    body.setUserData({ fill: "rgba(200,160,50,0.8)", label: "conveyor" });
+
+    // Surface velocity: pre-contact listener applies tangent speed
+    this.world.on("pre-solve", (contact) => {
+      const fA = contact.getFixtureA();
+      const fB = contact.getFixtureB();
+      if (fA === fixture || fB === fixture) {
+        contact.setTangentSpeed(speed);
+      }
+    });
+
+    return body;
+  }
+
+  addDynamite(x: number, y: number, fuseTime = 3) {
+    const body = this.world.createBody({ type: "dynamic", position: planck.Vec2(x, y) });
+    body.createFixture({ shape: planck.Box(0.25, 0.4), density: 2, friction: 0.5 });
+    body.setUserData({ fill: "rgba(255,50,30,0.9)", label: "dynamite" });
+
+    const world = this.world;
+    const blastRadius = 8;
+    const blastForce = 30;
+
+    setTimeout(() => {
+      // Check body still exists
+      if (!body.isActive()) return;
+      const pos = body.getPosition();
+      const center = planck.Vec2(pos.x, pos.y);
+
+      // Destroy the dynamite
+      world.destroyBody(body);
+
+      // Apply radial impulse to nearby dynamic bodies
+      const affected: { body: planck.Body; dist: number }[] = [];
+      world.queryAABB(
+        planck.AABB(
+          planck.Vec2(center.x - blastRadius, center.y - blastRadius),
+          planck.Vec2(center.x + blastRadius, center.y + blastRadius),
+        ),
+        (fixture) => {
+          const b = fixture.getBody();
+          if (!b.isDynamic()) return true;
+          const d = planck.Vec2.lengthOf(planck.Vec2.sub(b.getPosition(), center));
+          if (d < blastRadius) {
+            affected.push({ body: b, dist: d });
+          }
+          return true;
+        },
+      );
+
+      for (const { body: b, dist } of affected) {
+        const dir = planck.Vec2.sub(b.getPosition(), center);
+        const len = planck.Vec2.lengthOf(dir);
+        if (len < 0.01) continue;
+        const falloff = 1 - dist / blastRadius;
+        const impulse = planck.Vec2.mul(dir, (blastForce * falloff * b.getMass()) / len);
+        b.applyLinearImpulse(impulse, b.getPosition(), true);
+      }
+    }, fuseTime * 1000);
+
+    return body;
+  }
+
   setGravity(g: number) {
     this.gravity = g;
     this.world.setGravity(planck.Vec2(0, g));

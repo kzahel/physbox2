@@ -9,6 +9,8 @@ export type Tool =
   | "car"
   | "springball"
   | "launcher"
+  | "conveyor"
+  | "dynamite"
   | "ropetool"
   | "grab"
   | "erase"
@@ -138,6 +140,12 @@ export class InputManager {
         break;
       case "launcher":
         this.game.addLauncher(world.x, world.y);
+        break;
+      case "conveyor":
+        this.game.addConveyor(world.x, world.y);
+        break;
+      case "dynamite":
+        this.game.addDynamite(world.x, world.y);
         break;
       case "erase":
         this.eraseAtScreen(e.clientX, e.clientY);
@@ -371,6 +379,12 @@ export class InputManager {
           break;
         case "launcher":
           this.game.addLauncher(world.x, world.y);
+          break;
+        case "conveyor":
+          this.game.addConveyor(world.x, world.y);
+          break;
+        case "dynamite":
+          this.game.addDynamite(world.x, world.y);
           break;
         case "erase":
           this.eraseAtScreen(t.x, t.y);
@@ -606,7 +620,7 @@ export class InputManager {
     this.selectedBody = body;
   }
 
-  private readonly CREATION_TOOLS = new Set<Tool>(["box", "ball", "rope", "car", "springball"]);
+  private readonly CREATION_TOOLS = new Set<Tool>(["box", "ball", "rope", "car", "springball", "dynamite"]);
 
   private startMultiPlace() {
     if (!this.multiPlace || !this.CREATION_TOOLS.has(this.tool)) return;
@@ -640,6 +654,9 @@ export class InputManager {
         break;
       case "springball":
         this.game.addSpringBall(wx, wy);
+        break;
+      case "dynamite":
+        this.game.addDynamite(wx, wy);
         break;
     }
   }
