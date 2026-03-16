@@ -22,7 +22,7 @@ export function createCannon(
   body.setUserData({ fill: "rgba(80,80,90,0.9)", label: "cannon" });
 
   const fire = () => {
-    if (!body.isActive()) return;
+    if (!body.isActive() || !body.getWorld()) return;
     const pos = body.getPosition();
     const a = body.getAngle();
     const dirX = Math.cos(a);
