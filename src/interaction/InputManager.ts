@@ -7,6 +7,7 @@ export type Tool =
   | "platform"
   | "rope"
   | "car"
+  | "springball"
   | "grab"
   | "erase"
   | "attach"
@@ -125,6 +126,9 @@ export class InputManager {
         break;
       case "car":
         this.game.addCar(world.x, world.y);
+        break;
+      case "springball":
+        this.game.addSpringBall(world.x, world.y);
         break;
       case "erase":
         this.eraseAtScreen(e.clientX, e.clientY);
@@ -339,6 +343,9 @@ export class InputManager {
         case "car":
           this.game.addCar(world.x, world.y);
           break;
+        case "springball":
+          this.game.addSpringBall(world.x, world.y);
+          break;
         case "erase":
           this.eraseAtScreen(t.x, t.y);
           break;
@@ -551,7 +558,7 @@ export class InputManager {
     this.selectedBody = body;
   }
 
-  private readonly CREATION_TOOLS = new Set<Tool>(["box", "ball", "rope", "car"]);
+  private readonly CREATION_TOOLS = new Set<Tool>(["box", "ball", "rope", "car", "springball"]);
 
   private startMultiPlace() {
     if (!this.multiPlace || !this.CREATION_TOOLS.has(this.tool)) return;
@@ -582,6 +589,9 @@ export class InputManager {
         break;
       case "car":
         this.game.addCar(wx, wy);
+        break;
+      case "springball":
+        this.game.addSpringBall(wx, wy);
         break;
     }
   }
