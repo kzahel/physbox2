@@ -1,5 +1,5 @@
 import type * as planck from "planck";
-import { ERASE_RADIUS_PX, GRAB_RADIUS_PX, type InputManager } from "../interaction/InputManager";
+import { ERASE_RADIUS_PX, GLUE_RADIUS_PX, GRAB_RADIUS_PX, type InputManager } from "../interaction/InputManager";
 import type { Camera } from "./Camera";
 import { KILL_Y, KILL_Y_TOP } from "./Game";
 
@@ -152,6 +152,8 @@ export class Renderer {
         this.drawToolCursor(pos, 10, "rgba(50, 255, 150, 0.6)", "rgba(50, 255, 150, 0.05)");
       } else if (tool === "ropetool") {
         this.drawToolCursor(pos, 10, "rgba(180, 160, 120, 0.6)", "rgba(180, 160, 120, 0.05)");
+      } else if (tool === "glue") {
+        this.drawToolCursor(pos, GLUE_RADIUS_PX, "rgba(255, 220, 50, 0.7)", "rgba(255, 220, 50, 0.1)");
       } else if (tool === "scale" && !this.inputManager?.scaleDrag) {
         this.drawToolCursor(pos, 14, "rgba(180, 120, 255, 0.6)", "rgba(180, 120, 255, 0.05)");
       }

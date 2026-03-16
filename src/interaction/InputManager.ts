@@ -24,10 +24,12 @@ export type Tool =
   | "balloon"
   | "fan"
   | "ragdoll"
-  | "cannon";
+  | "cannon"
+  | "glue";
 
 export const ERASE_RADIUS_PX = 24; // CSS pixels
 export const GRAB_RADIUS_PX = 30; // CSS pixels — touch grab hit area
+export const GLUE_RADIUS_PX = 28; // CSS pixels — glue brush radius
 
 export class InputManager {
   tool: Tool = "grab";
@@ -174,6 +176,9 @@ export class InputManager {
       case "erase":
         this.eraseAtScreen(e.clientX, e.clientY);
         break;
+      case "glue":
+        this.glueAtScreen(e.clientX, e.clientY);
+        break;
       case "attach":
         this.handleAttach(world.x, world.y);
         break;
@@ -221,6 +226,9 @@ export class InputManager {
 
     if (this.tool === "erase" && e.buttons & 1) {
       this.eraseAtScreen(e.clientX, e.clientY);
+    }
+    if (this.tool === "glue" && e.buttons & 1) {
+      this.glueAtScreen(e.clientX, e.clientY);
     }
 
     if (this.platformDraw) {
@@ -330,6 +338,10 @@ export class InputManager {
         this.toolCursor = { x: t.clientX, y: t.clientY };
         this.eraseAtScreen(t.clientX, t.clientY);
         this.touchToolFired = true;
+      } else if (this.tool === "glue") {
+        this.toolCursor = { x: t.clientX, y: t.clientY };
+        this.glueAtScreen(t.clientX, t.clientY);
+        this.touchToolFired = true;
       }
     }
   }
@@ -391,6 +403,10 @@ export class InputManager {
         this.toolCursor = { x: t.x, y: t.y };
         this.eraseAtScreen(t.x, t.y);
         this.touchToolFired = true;
+      } else if (this.tool === "glue") {
+        this.toolCursor = { x: t.x, y: t.y };
+        this.glueAtScreen(t.x, t.y);
+        this.touchToolFired = true;
       } else if (this.platformDraw) {
         const world = this.game.camera.toWorld(t.x, t.y, this.game.canvas);
         this.platformDraw.end = { x: world.x, y: world.y };
@@ -449,6 +465,9 @@ export class InputManager {
           break;
         case "erase":
           this.eraseAtScreen(t.x, t.y);
+          break;
+        case "glue":
+          this.glueAtScreen(t.x, t.y);
           break;
         case "attach": {
           this.handleAttach(world.x, world.y);
@@ -510,6 +529,72 @@ export class InputManager {
     );
 
     for (const b of toRemove) this.game.world.destroyBody(b);
+  }
+
+  /** Glue: weld all nearby body pairs within brush radius */
+  private glueAtScreen(sx: number, sy: number) {
+    const r = GLUE_RADIUS_PX / this.game.camera.zoom;
+    const world = this.game.camera.toWorld(sx, sy, this.game.canvas);
+    const center = planck.Vec2(world.x, world.y);
+    const bodies: planck.Body[] = [];
+
+    this.game.world.queryAABB(
+      planck.AABB(planck.Vec2(world.x - r, world.y - r), planck.Vec2(world.x + r, world.y + r)),
+      (fixture) => {
+        const body = fixture.getBody();
+        if (body === this.groundBody) return true;
+        if (planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), center)) < r) {
+          if (!bodies.includes(body)) bodies.push(body);
+        }
+        return true;
+      },
+    );
+
+    // Weld pairs that are close together (gap < 0.5m)
+    const GAP = 0.5;
+    for (let i = 0; i < bodies.length; i++) {
+      for (let j = i + 1; j < bodies.length; j++) {
+        const a = bodies[i];
+        const b = bodies[j];
+        // Skip if already welded
+        if (this.areWelded(a, b)) continue;
+        const dist = planck.Vec2.lengthOf(planck.Vec2.sub(a.getPosition(), b.getPosition()));
+        // Use sum of rough radii + gap threshold
+        const rA = this.bodyRadius(a);
+        const rB = this.bodyRadius(b);
+        if (dist < rA + rB + GAP) {
+          const mid = planck.Vec2.mid(a.getPosition(), b.getPosition());
+          this.game.world.createJoint(planck.WeldJoint({}, a, b, mid));
+        }
+      }
+    }
+  }
+
+  private areWelded(a: planck.Body, b: planck.Body): boolean {
+    for (let je = a.getJointList(); je; je = je.next) {
+      const joint = je.joint;
+      if (!joint || joint.getType() !== "weld-joint") continue;
+      const other = joint.getBodyA() === a ? joint.getBodyB() : joint.getBodyA();
+      if (other === b) return true;
+    }
+    return false;
+  }
+
+  private bodyRadius(body: planck.Body): number {
+    let maxR = 0;
+    for (let f = body.getFixtureList(); f; f = f.getNext()) {
+      const shape = f.getShape();
+      if (shape.getType() === "circle") {
+        maxR = Math.max(maxR, (shape as planck.CircleShape).getRadius());
+      } else if (shape.getType() === "polygon") {
+        // Use half the AABB diagonal as rough radius
+        const aabb = new planck.AABB();
+        shape.computeAABB(aabb, planck.Transform.identity(), 0);
+        const ext = planck.Vec2.sub(aabb.upperBound, aabb.lowerBound);
+        maxR = Math.max(maxR, planck.Vec2.lengthOf(ext) / 2);
+      }
+    }
+    return maxR;
   }
 
   private finishPlatformDraw() {
