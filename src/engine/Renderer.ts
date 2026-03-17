@@ -228,6 +228,67 @@ export class Renderer implements IRenderer {
       ctx.restore();
     }
 
+    // Draw polygon draw preview
+    if (this.inputManager?.tool === "draw") {
+      const pts = this.inputManager.drawTool.drawPoints;
+      if (pts.length >= 2) {
+        const ctx = this.ctx;
+        ctx.save();
+
+        // Draw the freeform path
+        const screenPts = pts.map((p) => camera.toScreen(p.x, p.y, this.canvas));
+        ctx.beginPath();
+        ctx.moveTo(screenPts[0].x, screenPts[0].y);
+        for (let i = 1; i < screenPts.length; i++) {
+          ctx.lineTo(screenPts[i].x, screenPts[i].y);
+        }
+        ctx.strokeStyle = "rgba(120, 200, 160, 0.6)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Draw convex hull preview if enough points
+        if (pts.length >= 3) {
+          // Simple convex hull for preview (same algorithm as prefab)
+          const sorted = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+          const cross = (o: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) =>
+            (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+          const lower: { x: number; y: number }[] = [];
+          for (const p of sorted) {
+            while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+            lower.push(p);
+          }
+          const upper: { x: number; y: number }[] = [];
+          for (let i = sorted.length - 1; i >= 0; i--) {
+            const p = sorted[i];
+            while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+            upper.push(p);
+          }
+          lower.pop();
+          upper.pop();
+          const hull = lower.concat(upper);
+
+          if (hull.length >= 3) {
+            const hullScreen = hull.map((p) => camera.toScreen(p.x, p.y, this.canvas));
+            ctx.beginPath();
+            ctx.moveTo(hullScreen[0].x, hullScreen[0].y);
+            for (let i = 1; i < hullScreen.length; i++) {
+              ctx.lineTo(hullScreen[i].x, hullScreen[i].y);
+            }
+            ctx.closePath();
+            ctx.fillStyle = "rgba(120, 200, 160, 0.15)";
+            ctx.fill();
+            ctx.strokeStyle = "rgba(120, 200, 160, 0.8)";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+        }
+
+        ctx.restore();
+      }
+    }
+
     // Draw rope pending highlight
     if (this.inputManager?.ropePending) {
       const rp = this.inputManager.ropePending;

@@ -7,6 +7,7 @@ import { AttachTool } from "./tools/AttachTool";
 import { AttractTool } from "./tools/AttractTool";
 import { CreationTool } from "./tools/CreationTool";
 import { DetachTool } from "./tools/DetachTool";
+import { DrawTool } from "./tools/DrawTool";
 import { EraseTool } from "./tools/EraseTool";
 import { GlueTool, UnGlueTool } from "./tools/GlueTool";
 import { GrabTool } from "./tools/GrabTool";
@@ -47,7 +48,8 @@ export type Tool =
   | "cannon"
   | "glue"
   | "unglue"
-  | "train";
+  | "train"
+  | "draw";
 
 const CREATION_TOOL_IDS: Tool[] = [
   "box",
@@ -97,6 +99,7 @@ export class InputManager {
   readonly scaleTool: ScaleTool;
   readonly ropeTool: RopeTool;
   readonly springTool: SpringTool;
+  readonly drawTool: DrawTool;
   readonly platformTools: Map<Tool, PlatformDrawTool>;
 
   onToolChange?: (tool: Tool) => void;
@@ -123,6 +126,7 @@ export class InputManager {
     this.attractTool = new AttractTool(ctx);
     this.selectTool = new SelectTool(ctx);
     this.scaleTool = new ScaleTool(ctx);
+    this.drawTool = new DrawTool(ctx);
 
     // Platform-draw family
     const platformTool = new PlatformDrawTool(ctx, "platform");
@@ -171,6 +175,7 @@ export class InputManager {
       ragdoll: creationTools.ragdoll!,
       dynamite: creationTools.dynamite!,
       train: creationTools.train!,
+      draw: this.drawTool,
     };
 
     this.ragdollController = new RagdollController(game, this.keys);
@@ -356,7 +361,7 @@ export class InputManager {
         const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.container);
         h.onDown?.(world.x, world.y, t.clientX, t.clientY);
         this.touchToolFired = true;
-      } else if (this.isPlatformDrawTool()) {
+      } else if (this.isPlatformDrawTool() || this.tool === "draw") {
         const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.container);
         h.onDown?.(world.x, world.y, t.clientX, t.clientY);
         this.touchToolFired = true;
@@ -380,6 +385,7 @@ export class InputManager {
       this.stopMultiPlace();
       const pt = this.platformTools.get(this.tool);
       if (pt) pt.platformDraw = null;
+      this.drawTool.reset();
 
       const prevA = this.lastTouches[0];
       const prevB = this.lastTouches[1];
@@ -412,7 +418,7 @@ export class InputManager {
       } else if (this.isBrushTool()) {
         h.onBrush?.(world.x, world.y, t.x, t.y);
         this.touchToolFired = true;
-      } else if (this.isPlatformDrawTool()) {
+      } else if (this.isPlatformDrawTool() || this.tool === "draw") {
         h.onMove?.(world.x, world.y, dx, dy, t.x, t.y);
       } else if (this.multiPlaceInterval) {
         this.lastMouse = { x: t.x, y: t.y };
