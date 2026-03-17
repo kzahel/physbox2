@@ -244,8 +244,13 @@ export class WaterSystem {
       const colL = this.columns.get(idxL)!;
       const colR = this.columns.get(idxR)!;
 
-      // Check wall between them
+      // Check wall between them (explicit wall OR implicit wall from floor step)
       if (colL.wallRight || colR.wallLeft) continue;
+
+      // Floor difference acts as an implicit wall: if neither water level
+      // exceeds the higher floor, the step/slope blocks flow entirely.
+      const wallHeight = Math.max(colL.floor, colR.floor);
+      if (colL.level <= wallHeight + 0.01 && colR.level <= wallHeight + 0.01) continue;
 
       const diff = colL.level - colR.level;
       if (Math.abs(diff) < 0.001) continue;
@@ -268,12 +273,11 @@ export class WaterSystem {
 
       // Try expand right
       if (!col.wallRight && !this.columns.has(idx + 1)) {
-        const rightLevel = col.level;
-        // Only expand if there's enough volume to share
-        if (col.volume > MIN_DEPTH * COL_WIDTH * 3) {
+        // Only expand if there's enough volume and water is above the floor
+        if (col.volume > MIN_DEPTH * COL_WIDTH * 3 && col.level > col.floor + 0.05) {
           const newCol: Column = {
             x: (idx + 1) * COL_WIDTH,
-            level: rightLevel,
+            level: col.level,
             floor: col.floor, // approximate until raycasted
             volume: 0,
             wallLeft: false,
@@ -291,7 +295,7 @@ export class WaterSystem {
 
       // Try expand left
       if (!col.wallLeft && !this.columns.has(idx - 1)) {
-        if (col.volume > MIN_DEPTH * COL_WIDTH * 3) {
+        if (col.volume > MIN_DEPTH * COL_WIDTH * 3 && col.level > col.floor + 0.05) {
           const newCol: Column = {
             x: (idx - 1) * COL_WIDTH,
             level: col.level,
