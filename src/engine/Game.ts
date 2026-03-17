@@ -183,6 +183,7 @@ export class Game {
         frequencyHz: 3,
         dampingRatio: 0.3,
         length: dist,
+        collideConnected: true,
       },
       a,
       b,
