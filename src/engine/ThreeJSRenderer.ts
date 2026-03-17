@@ -106,50 +106,48 @@ function createPolygonGeometry(verts: { x: number; y: number }[]): THREE.BufferG
     inner.push({ x: curr.x + (nx / nl) * scale, y: curr.y + (ny / nl) * scale });
   }
 
-  // Triangulate faces using ear-clipping via THREE.ShapeUtils
-  const frontIndices = THREE.ShapeUtils.triangulateShape(
-    inner.map((v) => new THREE.Vector2(v.x, v.y)),
+  // Triangulate using original verts for faces (these match the collider)
+  const faceIndices = THREE.ShapeUtils.triangulateShape(
+    verts.map((v) => new THREE.Vector2(v.x, v.y)),
     [],
   );
 
   const positions: number[] = [];
   const indices: number[] = [];
 
-  // Helper: push a vertex, return its index
   const addVert = (x: number, y: number, z: number) => {
     const idx = positions.length / 3;
     positions.push(x, y, z);
     return idx;
   };
 
-  // Front face (inner ring at +halfD)
+  // Front face (original verts at +halfD, inset from surface)
+  const cz = halfD - chamfer; // front face set back by chamfer
   const frontBase = positions.length / 3;
-  for (const v of inner) addVert(v.x, v.y, halfD);
-  for (const tri of frontIndices) indices.push(frontBase + tri[0], frontBase + tri[1], frontBase + tri[2]);
+  for (const v of verts) addVert(v.x, v.y, cz);
+  for (const tri of faceIndices) indices.push(frontBase + tri[0], frontBase + tri[1], frontBase + tri[2]);
 
-  // Back face (inner ring at -halfD)
+  // Back face (original verts at -halfD, inset from surface)
   const backBase = positions.length / 3;
-  for (const v of inner) addVert(v.x, v.y, -halfD);
-  for (const tri of frontIndices) indices.push(backBase + tri[2], backBase + tri[1], backBase + tri[0]);
+  for (const v of verts) addVert(v.x, v.y, -cz);
+  for (const tri of faceIndices) indices.push(backBase + tri[2], backBase + tri[1], backBase + tri[0]);
 
-  // Side chamfer strips: outer edge ring at z=0, inner ring at z=±halfD
-  // For each edge, we make 3 quads: front chamfer, flat side, back chamfer
+  // Side strips: inner verts at z=±cz, inset verts at z=0 form the chamfer
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
-    // Outer verts (collider boundary) at z=0
-    const o0 = addVert(verts[i].x, verts[i].y, 0);
-    const o1 = addVert(verts[j].x, verts[j].y, 0);
-    // Inner verts front at z=+halfD
-    const if0 = addVert(inner[i].x, inner[i].y, halfD);
-    const if1 = addVert(inner[j].x, inner[j].y, halfD);
-    // Inner verts back at z=-halfD
-    const ib0 = addVert(inner[i].x, inner[i].y, -halfD);
-    const ib1 = addVert(inner[j].x, inner[j].y, -halfD);
+    // Original verts (collider boundary) at front/back z
+    const f0 = addVert(verts[i].x, verts[i].y, cz);
+    const f1 = addVert(verts[j].x, verts[j].y, cz);
+    const b0 = addVert(verts[i].x, verts[i].y, -cz);
+    const b1 = addVert(verts[j].x, verts[j].y, -cz);
+    // Inset verts at z=0 (the chamfer ridge, pulled inward)
+    const m0 = addVert(inner[i].x, inner[i].y, 0);
+    const m1 = addVert(inner[j].x, inner[j].y, 0);
 
-    // Front chamfer (outer z=0 -> inner z=+halfD)
-    indices.push(o0, o1, if1, o0, if1, if0);
-    // Back chamfer (inner z=-halfD -> outer z=0)
-    indices.push(ib0, ib1, o1, ib0, o1, o0);
+    // Front chamfer: front face edge -> inset ridge
+    indices.push(f0, f1, m1, f0, m1, m0);
+    // Back chamfer: inset ridge -> back face edge
+    indices.push(m0, m1, b1, m0, b1, b0);
   }
 
   const geo = new THREE.BufferGeometry();
