@@ -7,9 +7,9 @@ export function createConveyor(world: planck.World, x: number, y: number, w = 6,
   body.setUserData({ fill: "rgba(200,160,50,0.8)", label: "conveyor", speed });
 
   world.on("pre-solve", (contact) => {
-    const fA = contact.getFixtureA();
-    const fB = contact.getFixtureB();
-    if (fA === fixture || fB === fixture) {
+    const bA = contact.getFixtureA().getBody();
+    const bB = contact.getFixtureB().getBody();
+    if (bA === body || bB === body) {
       const ud = body.getUserData() as { speed?: number } | null;
       contact.setTangentSpeed(ud?.speed ?? speed);
     }
