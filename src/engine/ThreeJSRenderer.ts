@@ -493,7 +493,10 @@ export class ThreeJSRenderer implements IRenderer {
 
     for (let joint = world.getJointList(); joint; joint = joint.getNext()) {
       seen.add(joint);
-      if (joint.getType() === "rope-joint") continue;
+      if (joint.getType() === "rope-joint") {
+        const ud = joint.getUserData() as { ropeStabilizer?: boolean } | null;
+        if (!ud?.ropeStabilizer) continue;
+      }
       const a = joint.getAnchorA();
       const b = joint.getAnchorB();
 
@@ -525,6 +528,8 @@ export class ThreeJSRenderer implements IRenderer {
     const group = new THREE.Group();
     const isSpring = joint.getType() === "distance-joint";
 
+    const isStabilizer = (joint.getUserData() as any)?.ropeStabilizer;
+
     if (isSpring) {
       const points = this.computeSpringCoilPoints(a, b);
       const geo = new THREE.BufferGeometry().setFromPoints(points);
@@ -535,8 +540,15 @@ export class ThreeJSRenderer implements IRenderer {
         new THREE.Vector3(a.x, a.y, 0.5),
         new THREE.Vector3(b.x, b.y, 0.5),
       ]);
-      const mat = new THREE.LineBasicMaterial({ color: 0x96c8ff, transparent: true, opacity: 0.4 });
+      const color = isStabilizer ? 0xc8b478 : 0x96c8ff;
+      const opacity = isStabilizer ? 0.2 : 0.4;
+      const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity });
       group.add(new THREE.Line(geo, mat));
+    }
+
+    if (isStabilizer) {
+      // No anchor dots for stabilizer lines — keep them minimal
+      return group;
     }
 
     const dotGeo = new THREE.SphereGeometry(0.08, 8, 8);
@@ -564,6 +576,7 @@ export class ThreeJSRenderer implements IRenderer {
       positions.setXYZ(1, b.x, b.y, 0.5);
       positions.needsUpdate = true;
     }
+    if (group.children.length < 3) return; // stabilizer joints have no dots
     const dotA = group.children[1] as THREE.Mesh;
     dotA.position.set(a.x, a.y, 0.5);
     const dotB = group.children[2] as THREE.Mesh;

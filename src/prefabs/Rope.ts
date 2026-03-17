@@ -95,7 +95,7 @@ export function createRopeBetween(
         localAnchorB: localB,
         maxLength: dist,
         collideConnected: true,
-        userData: { ropeStabilizer: true, restLength: dist },
+        userData: { ropeStabilizer: true, restLength: dist, chainBodies: [...chainLinks] },
       } as planck.RopeJointDef),
     );
 
@@ -109,6 +109,10 @@ export function createRopeBetween(
       const mid = chainLinks[idx];
       if (!mid) continue;
 
+      // The sub-chain of bodies this stabilizer depends on
+      const subChainA = chainLinks.slice(0, idx + 1);
+      const subChainB = chainLinks.slice(idx);
+
       // Joint from first endpoint to this interior point
       if (first !== mid && (first.isDynamic() || mid.isDynamic())) {
         world.createJoint(
@@ -119,7 +123,7 @@ export function createRopeBetween(
             localAnchorB: planck.Vec2(0, 0),
             maxLength: dist * frac * SLACK,
             collideConnected: true,
-            userData: { ropeStabilizer: true, restLength: dist * frac * SLACK },
+            userData: { ropeStabilizer: true, restLength: dist * frac * SLACK, chainBodies: subChainA },
           } as planck.RopeJointDef),
         );
       }
@@ -134,7 +138,7 @@ export function createRopeBetween(
             localAnchorB: localB,
             maxLength: dist * (1 - frac) * SLACK,
             collideConnected: true,
-            userData: { ropeStabilizer: true, restLength: dist * (1 - frac) * SLACK },
+            userData: { ropeStabilizer: true, restLength: dist * (1 - frac) * SLACK, chainBodies: subChainB },
           } as planck.RopeJointDef),
         );
       }
@@ -149,10 +153,17 @@ export function createRopeBetween(
 export function applyRopeStabilization(world: planck.World) {
   const SPRING_K = 50; // spring stiffness
   const DAMPING = 5; // velocity damping along rope axis
+  const toDestroy: planck.Joint[] = [];
 
   for (let j = world.getJointList(); j; j = j.getNext()) {
-    const ud = j.getUserData() as { ropeStabilizer?: boolean; restLength?: number } | null;
+    const ud = j.getUserData() as { ropeStabilizer?: boolean; restLength?: number; chainBodies?: planck.Body[] } | null;
     if (!ud?.ropeStabilizer) continue;
+
+    // If any body in the dependent chain has been destroyed, remove this stabilizer
+    if (ud.chainBodies?.some((b) => (b.getUserData() as any)?.destroyed)) {
+      toDestroy.push(j);
+      continue;
+    }
 
     const bodyA = j.getBodyA();
     const bodyB = j.getBodyB();
@@ -182,4 +193,6 @@ export function applyRopeStabilization(world: planck.World) {
     if (bodyA.isDynamic()) bodyA.applyForce(force, anchorA, true);
     if (bodyB.isDynamic()) bodyB.applyForce(planck.Vec2.mul(-1, force), anchorB, true);
   }
+
+  for (const j of toDestroy) world.destroyJoint(j);
 }

@@ -6,6 +6,7 @@ import { KILL_Y, KILL_Y_TOP } from "./Game";
 import type { IRenderer } from "./IRenderer";
 import { bodyColor, OverlayRenderer } from "./OverlayRenderer";
 import { ParticleSystem } from "./ParticleSystem";
+import { forEachBody } from "./Physics";
 
 /** Ocean surface wave displacement in world units */
 function oceanWave(wx: number): number {
@@ -62,7 +63,7 @@ export class Renderer implements IRenderer {
   private drawBodies(world: planck.World, camera: Camera) {
     const ctx = this.ctx;
 
-    for (let body = world.getBodyList(); body; body = body.getNext()) {
+    forEachBody(world, (body) => {
       const pos = body.getPosition();
       const angle = body.getAngle();
 
@@ -126,7 +127,7 @@ export class Renderer implements IRenderer {
 
         ctx.restore();
       }
-    }
+    });
   }
 
   private drawJoints(world: planck.World, camera: Camera) {
@@ -139,6 +140,15 @@ export class Renderer implements IRenderer {
       const sb = camera.toScreen(b.x, b.y, this.canvas);
 
       if (joint.getType() === "rope-joint") {
+        const ud = joint.getUserData() as { ropeStabilizer?: boolean } | null;
+        if (ud?.ropeStabilizer) {
+          ctx.strokeStyle = "rgba(200,180,120,0.3)";
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(sa.x, sa.y);
+          ctx.lineTo(sb.x, sb.y);
+          ctx.stroke();
+        }
         continue;
       } else if (joint.getType() === "distance-joint") {
         this.drawSpringCoil(sa, sb, camera.zoom);
