@@ -387,13 +387,14 @@ export class ThreeJSRenderer implements IRenderer {
         opacity: isSensor ? 0.15 : fOpacity,
         roughness: isStatic ? 0.8 : 0.4,
         metalness: isStatic ? 0.1 : 0.3,
+        flatShading: true,
       });
 
       if (shape.getType() === "circle") {
         const circle = shape as planck.CircleShape;
         const r = circle.getRadius();
         const center = circle.getCenter();
-        const geo = new THREE.SphereGeometry(r, 16, 12);
+        const geo = new THREE.SphereGeometry(r, 8, 6);
         geo.translate(center.x, center.y, 0);
         const mesh = new THREE.Mesh(geo, mat);
         mesh.castShadow = true;
