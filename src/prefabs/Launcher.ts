@@ -1,4 +1,5 @@
 import * as planck from "planck";
+import { createWeldJoint } from "../engine/Physics";
 
 export function createLauncher(world: planck.World, x: number, y: number): planck.Body {
   const base = world.createBody({ type: "static", position: planck.Vec2(x, y) });
@@ -13,7 +14,7 @@ export function createLauncher(world: planck.World, x: number, y: number): planc
   plat.createFixture({ shape: planck.Box(2, 0.2), density: 1, friction: 0.7 });
   plat.setUserData({ fill: "rgba(80,180,80,0.8)" });
 
-  world.createJoint(planck.WeldJoint({}, rod, plat, planck.Vec2(x, y + 2.5)));
+  createWeldJoint(world, rod, plat, planck.Vec2(x, y + 2.5));
 
   const piston = world.createJoint(
     planck.PrismaticJoint(

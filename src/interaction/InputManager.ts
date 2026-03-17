@@ -1,6 +1,6 @@
 import type * as planck from "planck";
 import type { Game } from "../engine/Game";
-import { findClosestBody } from "../engine/Physics";
+import { distance, findClosestBody } from "../engine/Physics";
 import { RagdollController } from "./RagdollController";
 import type { Tool, ToolContext, ToolHandler, ToolRenderInfo } from "./ToolHandler";
 import { AttachTool } from "./tools/AttachTool";
@@ -298,7 +298,7 @@ export class InputManager implements ToolRenderInfo {
   }
 
   private touchDist(a: { x: number; y: number }, b: { x: number; y: number }): number {
-    return Math.hypot(a.x - b.x, a.y - b.y);
+    return distance(a, b);
   }
 
   private onTouchStart(e: TouchEvent) {

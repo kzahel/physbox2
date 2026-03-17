@@ -1,5 +1,5 @@
 import * as planck from "planck";
-import { areWelded, bodyRadius } from "../../engine/Physics";
+import { areWelded, bodyRadius, createWeldJoint, distance } from "../../engine/Physics";
 import { BrushTool } from "./BrushTool";
 
 export const GLUE_RADIUS_PX = 28;
@@ -14,12 +14,12 @@ export class GlueTool extends BrushTool {
         const a = bodies[i];
         const b = bodies[j];
         if (areWelded(a, b)) continue;
-        const dist = planck.Vec2.lengthOf(planck.Vec2.sub(a.getPosition(), b.getPosition()));
+        const dist = distance(a.getPosition(), b.getPosition());
         const rA = bodyRadius(a);
         const rB = bodyRadius(b);
         if (dist < rA + rB + GAP) {
           const mid = planck.Vec2.mid(a.getPosition(), b.getPosition());
-          this.ctx.game.world.createJoint(planck.WeldJoint({}, a, b, mid));
+          createWeldJoint(this.ctx.game.world, a, b, mid);
         }
       }
     }

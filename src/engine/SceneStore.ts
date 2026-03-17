@@ -1,6 +1,6 @@
 import * as planck from "planck";
 import type { Game } from "./Game";
-import { forEachBody, markDestroyed } from "./Physics";
+import { createWeldJoint, forEachBody, markDestroyed } from "./Physics";
 
 // ── Serialization types ──
 
@@ -91,7 +91,7 @@ const JOINT_CODECS: Record<string, JointCodec> = {
   "weld-joint": {
     serialize() {},
     deserialize(sj, bodyA, bodyB, anchorA, _anchorB, world) {
-      world.createJoint(planck.WeldJoint({ collideConnected: sj.collideConnected }, bodyA, bodyB, anchorA));
+      createWeldJoint(world, bodyA, bodyB, anchorA, { collideConnected: sj.collideConnected });
     },
   },
   "revolute-joint": {

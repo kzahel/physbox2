@@ -1,7 +1,7 @@
 import * as planck from "planck";
 import { type FanData, getBodyUserData, isFan } from "../engine/BodyUserData";
 import type { IRenderer } from "../engine/IRenderer";
-import { forEachBody } from "../engine/Physics";
+import { distance, forEachBody } from "../engine/Physics";
 
 export function createFan(
   world: planck.World,
@@ -69,7 +69,7 @@ export function applyFanForce(world: planck.World): void {
 
     for (const b of affected) {
       const bp = b.getPosition();
-      const dist = Math.hypot(bp.x - pos.x, bp.y - pos.y);
+      const dist = distance(bp, pos);
       const falloff = 1 - dist / range;
       const f = force * falloff * b.getMass();
       b.applyForceToCenter(planck.Vec2(dirX * f, dirY * f), true);

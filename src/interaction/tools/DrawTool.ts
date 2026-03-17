@@ -1,3 +1,4 @@
+import { distance } from "../../engine/Physics";
 import { createPolygon } from "../../prefabs/Polygon";
 import type { ToolContext, ToolHandler } from "../ToolHandler";
 
@@ -22,7 +23,7 @@ export class DrawTool implements ToolHandler {
     if (!this.drawing) return;
     // Add point, but skip if too close to last point (avoid duplicates)
     const last = this.drawPoints[this.drawPoints.length - 1];
-    const dist = Math.hypot(wx - last.x, wy - last.y);
+    const dist = distance({ x: wx, y: wy }, last);
     if (dist > 0.05) {
       this.drawPoints.push({ x: wx, y: wy });
     }

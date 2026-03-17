@@ -1,12 +1,12 @@
 import * as planck from "planck";
 import { type BalloonData, getBodyUserData, isBalloon } from "../engine/BodyUserData";
+import { randomBodyColor } from "../engine/ColorUtils";
 import { forEachBody } from "../engine/Physics";
 
 export function createBalloon(world: planck.World, x: number, y: number): planck.Body {
   const r = Math.random;
   const radius = 0.5 + r() * 0.3;
-  const hue = Math.floor(r() * 360);
-  const color = `hsla(${hue},70%,55%,0.75)`;
+  const color = randomBodyColor(70, 1, 55, 1, 0.75);
 
   const body = world.createBody({
     type: "dynamic",

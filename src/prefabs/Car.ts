@@ -1,4 +1,5 @@
 import * as planck from "planck";
+import { randomBodyColor } from "../engine/ColorUtils";
 
 export function createCar(world: planck.World, x: number, y: number): planck.Body {
   const r = Math.random;
@@ -7,10 +8,7 @@ export function createCar(world: planck.World, x: number, y: number): planck.Bod
   const halfW = 2 * sz;
   const halfH = 0.5 * sz;
 
-  const hue = Math.floor(r() * 360);
-  const sat = 50 + Math.floor(r() * 40);
-  const lit = 40 + Math.floor(r() * 25);
-  const bodyColor = `hsla(${hue},${sat}%,${lit}%,0.85)`;
+  const bodyColor = randomBodyColor();
 
   const wg = 30 + Math.floor(r() * 40);
   const wheelColor = `rgba(${wg},${wg},${Math.floor(wg * 0.8)},0.9)`;

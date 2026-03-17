@@ -1,4 +1,5 @@
 import * as planck from "planck";
+import { createWeldJoint } from "../../engine/Physics";
 import type { ToolContext, ToolHandler } from "../ToolHandler";
 
 export class AttractTool implements ToolHandler {
@@ -64,10 +65,11 @@ export class AttractTool implements ToolHandler {
       if (!match) return;
 
       const manifold = contact.getWorldManifold(null);
-      const weldPoint = manifold?.points[0] ?? bodyA.getPosition();
+      const wp = manifold?.points[0] ?? bodyA.getPosition();
+      const weldPoint = planck.Vec2(wp.x, wp.y);
       setTimeout(() => {
         if (!this.attracting) return;
-        this.ctx.game.world.createJoint(planck.WeldJoint({}, bodyA, bodyB, weldPoint));
+        createWeldJoint(this.ctx.game.world, bodyA, bodyB, weldPoint);
         this.attracting = null;
       }, 0);
     });

@@ -61,7 +61,10 @@ function filteredNoiseBurst(
     bp.frequency.value = freq;
   }
 
-  src.connect(bp).connect(decayGain(ac, now, volume, duration)).connect(ac.destination);
+  src
+    .connect(bp)
+    .connect(decayGain(ac, now, volume, duration))
+    .connect(ac.destination);
   src.start(now);
   src.stop(now + duration);
   return src;

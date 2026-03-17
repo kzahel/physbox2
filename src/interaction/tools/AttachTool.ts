@@ -1,4 +1,5 @@
 import * as planck from "planck";
+import { createWeldJoint } from "../../engine/Physics";
 import type { ToolContext, ToolHandler } from "../ToolHandler";
 
 export class AttachTool implements ToolHandler {
@@ -20,7 +21,7 @@ export class AttachTool implements ToolHandler {
       if (body !== this.attachPending.body) {
         const midX = (this.attachPending.world.x + wx) / 2;
         const midY = (this.attachPending.world.y + wy) / 2;
-        this.ctx.game.world.createJoint(planck.WeldJoint({}, this.attachPending.body, body, planck.Vec2(midX, midY)));
+        createWeldJoint(this.ctx.game.world, this.attachPending.body, body, planck.Vec2(midX, midY));
       }
       this.attachPending = null;
     }

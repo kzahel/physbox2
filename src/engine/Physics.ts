@@ -2,6 +2,11 @@ import * as planck from "planck";
 import { playExplosion } from "./Audio";
 import type { IRenderer } from "./IRenderer";
 
+/** Euclidean distance between two points. */
+export function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
 /** Iterate all bodies in the world (hides Planck's linked-list API). */
 export function forEachBody(world: planck.World, cb: (body: planck.Body) => void): void {
   for (let b = world.getBodyList(); b; b = b.getNext()) cb(b);
@@ -125,7 +130,7 @@ export function queryBodiesInRadius(
     (fixture) => {
       const body = fixture.getBody();
       if (body === exclude || seen.has(body)) return true;
-      if (planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), center)) < radius) {
+      if (distance(body.getPosition(), center) < radius) {
         seen.add(body);
         bodies.push(body);
       }
@@ -151,7 +156,7 @@ export function findClosestBody(world: planck.World, wx: number, wy: number, rad
         bestDist = 0;
         return false;
       }
-      const d = planck.Vec2.lengthOf(planck.Vec2.sub(body.getPosition(), point));
+      const d = distance(body.getPosition(), point);
       if (d < bestDist) {
         bestDist = d;
         target = body;
@@ -171,6 +176,17 @@ export function destroyBodyAt(world: planck.World, wx: number, wy: number, radiu
     return true;
   }
   return false;
+}
+
+/** Create a weld joint between two bodies at the given anchor point. */
+export function createWeldJoint(
+  world: planck.World,
+  a: planck.Body,
+  b: planck.Body,
+  anchor: planck.Vec2,
+  opts: planck.WeldJointOpt = {},
+): planck.Joint {
+  return world.createJoint(planck.WeldJoint(opts, a, b, anchor))!;
 }
 
 /** Check if two bodies are connected by a weld joint. */
