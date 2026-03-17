@@ -61,63 +61,102 @@ const TOOL_CURSORS: Partial<Record<Tool, CursorStyle>> = {
 
 const EXTRUDE_DEPTH = 0.4;
 
-function createPolygonGeometry(verts: { x: number; y: number }[]): THREE.ExtrudeGeometry {
-  // Scale bevel proportionally to the shape size
-  let maxDist = 0;
-  for (const v of verts) {
-    const d = Math.hypot(v.x, v.y);
-    if (d > maxDist) maxDist = d;
-  }
-  const bevel = maxDist * 0.08;
-
-  // Inset vertices by bevel size so the bevel fills back out to the collider boundary
-  const insetVerts = insetPolygon(verts, bevel);
-  const shape = new THREE.Shape();
-  shape.moveTo(insetVerts[0].x, insetVerts[0].y);
-  for (let i = 1; i < insetVerts.length; i++) {
-    shape.lineTo(insetVerts[i].x, insetVerts[i].y);
-  }
-  shape.closePath();
-  return new THREE.ExtrudeGeometry(shape, {
-    depth: EXTRUDE_DEPTH,
-    bevelEnabled: true,
-    bevelThickness: bevel,
-    bevelSize: bevel,
-    bevelSegments: 1,
-  });
-}
-
-/** Shrink a polygon inward by `amount` along each edge normal. */
-function insetPolygon(verts: { x: number; y: number }[], amount: number): { x: number; y: number }[] {
+/**
+ * Build a chamfered polygon geometry: front face, back face, and angled
+ * side strips between an outer ring (at the collider boundary) and an
+ * inset ring (set back by the chamfer depth). The chamfer is clamped to
+ * the shortest half-edge so thin shapes like platforms stay correct.
+ */
+function createPolygonGeometry(verts: { x: number; y: number }[]): THREE.BufferGeometry {
   const n = verts.length;
-  const result: { x: number; y: number }[] = [];
+  const halfD = EXTRUDE_DEPTH / 2;
+
+  // Find shortest edge to clamp chamfer
+  let minEdge = Infinity;
+  for (let i = 0; i < n; i++) {
+    const a = verts[i];
+    const b = verts[(i + 1) % n];
+    minEdge = Math.min(minEdge, Math.hypot(b.x - a.x, b.y - a.y));
+  }
+  const chamfer = Math.min(minEdge * 0.15, halfD * 0.8, 0.12);
+
+  // Inset ring: shrink each vertex inward by chamfer amount
+  const inner: { x: number; y: number }[] = [];
   for (let i = 0; i < n; i++) {
     const prev = verts[(i - 1 + n) % n];
     const curr = verts[i];
     const next = verts[(i + 1) % n];
-
-    // Inward normals of the two edges meeting at this vertex
+    // Edge directions
     const e1x = curr.x - prev.x,
       e1y = curr.y - prev.y;
     const e2x = next.x - curr.x,
       e2y = next.y - curr.y;
-    // Inward normals (assuming CCW winding from Planck)
-    const n1x = e1y,
-      n1y = -e1x;
-    const n2x = e2y,
-      n2y = -e2x;
-    const len1 = Math.hypot(n1x, n1y) || 1;
-    const len2 = Math.hypot(n2x, n2y) || 1;
-    // Average inward direction
-    const nx = n1x / len1 + n2x / len2;
-    const ny = n1y / len1 + n2y / len2;
-    const len = Math.hypot(nx, ny) || 1;
-    // Scale so the offset along each edge normal is `amount`
-    const dot = (nx / len) * (n1x / len1) + (ny / len) * (n1y / len1);
-    const scale = dot > 0.1 ? amount / dot : amount;
-    result.push({ x: curr.x + (nx / len) * scale, y: curr.y + (ny / len) * scale });
+    // Inward normals (CCW winding)
+    const len1 = Math.hypot(e1x, e1y) || 1;
+    const len2 = Math.hypot(e2x, e2y) || 1;
+    const n1x = e1y / len1,
+      n1y = -e1x / len1;
+    const n2x = e2y / len2,
+      n2y = -e2x / len2;
+    const nx = n1x + n2x,
+      ny = n1y + n2y;
+    const nl = Math.hypot(nx, ny) || 1;
+    const dot = (nx / nl) * n1x + (ny / nl) * n1y;
+    const scale = dot > 0.1 ? chamfer / dot : chamfer;
+    inner.push({ x: curr.x + (nx / nl) * scale, y: curr.y + (ny / nl) * scale });
   }
-  return result;
+
+  // Triangulate faces using ear-clipping via THREE.ShapeUtils
+  const frontIndices = THREE.ShapeUtils.triangulateShape(
+    inner.map((v) => new THREE.Vector2(v.x, v.y)),
+    [],
+  );
+
+  const positions: number[] = [];
+  const indices: number[] = [];
+
+  // Helper: push a vertex, return its index
+  const addVert = (x: number, y: number, z: number) => {
+    const idx = positions.length / 3;
+    positions.push(x, y, z);
+    return idx;
+  };
+
+  // Front face (inner ring at +halfD)
+  const frontBase = positions.length / 3;
+  for (const v of inner) addVert(v.x, v.y, halfD);
+  for (const tri of frontIndices) indices.push(frontBase + tri[0], frontBase + tri[1], frontBase + tri[2]);
+
+  // Back face (inner ring at -halfD)
+  const backBase = positions.length / 3;
+  for (const v of inner) addVert(v.x, v.y, -halfD);
+  for (const tri of frontIndices) indices.push(backBase + tri[2], backBase + tri[1], backBase + tri[0]);
+
+  // Side chamfer strips: outer edge ring at z=0, inner ring at z=±halfD
+  // For each edge, we make 3 quads: front chamfer, flat side, back chamfer
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    // Outer verts (collider boundary) at z=0
+    const o0 = addVert(verts[i].x, verts[i].y, 0);
+    const o1 = addVert(verts[j].x, verts[j].y, 0);
+    // Inner verts front at z=+halfD
+    const if0 = addVert(inner[i].x, inner[i].y, halfD);
+    const if1 = addVert(inner[j].x, inner[j].y, halfD);
+    // Inner verts back at z=-halfD
+    const ib0 = addVert(inner[i].x, inner[i].y, -halfD);
+    const ib1 = addVert(inner[j].x, inner[j].y, -halfD);
+
+    // Front chamfer (outer z=0 -> inner z=+halfD)
+    indices.push(o0, o1, if1, o0, if1, if0);
+    // Back chamfer (inner z=-halfD -> outer z=0)
+    indices.push(ib0, ib1, o1, ib0, o1, o0);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
 }
 
 // ── Body-to-mesh key ──
