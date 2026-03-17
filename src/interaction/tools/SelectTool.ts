@@ -6,7 +6,7 @@ import {
   BTN_HALF_WIDTH,
   BTN_SPACING,
   BTN_TOGGLE_OFFSET_Y,
-} from "../../engine/Renderer";
+} from "../../engine/OverlayRenderer";
 import type { ToolContext, ToolHandler } from "../ToolHandler";
 
 export class SelectTool implements ToolHandler {

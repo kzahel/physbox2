@@ -166,6 +166,44 @@ export function destroyBodyAt(world: planck.World, wx: number, wy: number, radiu
   return false;
 }
 
+/** Check if two bodies are connected by a weld joint. */
+export function areWelded(a: planck.Body, b: planck.Body): boolean {
+  for (let je = a.getJointList(); je; je = je.next) {
+    const joint = je.joint;
+    if (!joint || joint.getType() !== "weld-joint") continue;
+    const other = joint.getBodyA() === a ? joint.getBodyB() : joint.getBodyA();
+    if (other === b) return true;
+  }
+  return false;
+}
+
+/** Collect all weld joints attached to a body. */
+export function getWeldJoints(body: planck.Body): planck.Joint[] {
+  const joints: planck.Joint[] = [];
+  for (let je = body.getJointList(); je; je = je.next) {
+    const joint = je.joint;
+    if (joint && joint.getType() === "weld-joint") joints.push(joint);
+  }
+  return joints;
+}
+
+/** Compute the bounding radius of a body from its fixtures. */
+export function bodyRadius(body: planck.Body): number {
+  let maxR = 0;
+  for (let f = body.getFixtureList(); f; f = f.getNext()) {
+    const shape = f.getShape();
+    if (shape.getType() === "circle") {
+      maxR = Math.max(maxR, (shape as planck.CircleShape).getRadius());
+    } else if (shape.getType() === "polygon") {
+      const aabb = new planck.AABB();
+      shape.computeAABB(aabb, planck.Transform.identity(), 0);
+      const ext = planck.Vec2.sub(aabb.upperBound, aabb.lowerBound);
+      maxR = Math.max(maxR, planck.Vec2.lengthOf(ext) / 2);
+    }
+  }
+  return maxR;
+}
+
 export function clearDynamic(world: planck.World): void {
   const toRemove: planck.Body[] = [];
   for (let b = world.getBodyList(); b; b = b.getNext()) {

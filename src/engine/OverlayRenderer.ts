@@ -1,6 +1,9 @@
 import type * as planck from "planck";
-import { ERASE_RADIUS_PX, GLUE_RADIUS_PX, GRAB_RADIUS_PX, hasMotor, isDirectional } from "../interaction/InputManager";
 import type { Tool, ToolRenderInfo } from "../interaction/ToolHandler";
+import { ERASE_RADIUS_PX } from "../interaction/tools/EraseTool";
+import { GLUE_RADIUS_PX } from "../interaction/tools/GlueTool";
+import { GRAB_RADIUS_PX } from "../interaction/tools/GrabTool";
+import { hasMotor, isDirectional } from "../interaction/tools/SelectTool";
 import { getBodyUserData } from "./BodyUserData";
 import type { Camera } from "./Camera";
 import type { IParticleSystem } from "./IRenderer";

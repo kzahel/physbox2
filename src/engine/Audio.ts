@@ -15,26 +15,43 @@ export function unlockAudio() {
   }
 }
 
-/** Short bounce thud — rate-limited to avoid overwhelming audio */
-let lastBounceTime = 0;
-const BOUNCE_COOLDOWN = 0.04; // seconds between any bounce sounds
-const MAX_CONCURRENT_BOUNCES = 3;
-let activeBounces = 0;
+/** Rate-limited sound player — prevents audio spam from rapid physics events. */
+class RateLimitedSound {
+  private lastTime = 0;
+  private active = 0;
+  private cooldown: number;
+  private maxConcurrent: number;
+  private play: (ac: AudioContext, now: number, intensity: number, onEnded: () => void) => void;
 
-export function playBounce(intensity: number) {
-  const ac = getCtx();
-  if (ac.state === "suspended") return;
-  const now = ac.currentTime;
+  constructor(
+    cooldown: number,
+    maxConcurrent: number,
+    play: (ac: AudioContext, now: number, intensity: number, onEnded: () => void) => void,
+  ) {
+    this.cooldown = cooldown;
+    this.maxConcurrent = maxConcurrent;
+    this.play = play;
+  }
 
-  // Rate limit
-  if (now - lastBounceTime < BOUNCE_COOLDOWN) return;
-  if (activeBounces >= MAX_CONCURRENT_BOUNCES) return;
-  lastBounceTime = now;
-  activeBounces++;
+  trigger(intensity: number): void {
+    const ac = getCtx();
+    if (ac.state === "suspended") return;
+    const now = ac.currentTime;
 
-  // intensity 0–1 controls volume and pitch — quadratic curve so soft hits are quiet
-  const vol = 0.02 + intensity * intensity * 0.35; // 0.02 – 0.37
-  const pitch = 250 + (1 - intensity) * 600; // higher pitch for lighter hits
+    if (now - this.lastTime < this.cooldown) return;
+    if (this.active >= this.maxConcurrent) return;
+    this.lastTime = now;
+    this.active++;
+
+    this.play(ac, now, intensity, () => {
+      this.active--;
+    });
+  }
+}
+
+const bounceSound = new RateLimitedSound(0.04, 3, (ac, now, intensity, onEnded) => {
+  const vol = 0.02 + intensity * intensity * 0.35;
+  const pitch = 250 + (1 - intensity) * 600;
   const dur = 0.03 + intensity * 0.1;
 
   const osc = ac.createOscillator();
@@ -49,31 +66,13 @@ export function playBounce(intensity: number) {
   osc.connect(gain).connect(ac.destination);
   osc.start(now);
   osc.stop(now + dur);
-  osc.onended = () => {
-    activeBounces--;
-  };
-}
+  osc.onended = onEnded;
+});
 
-/** Woody clack for box/polygon collisions — rate-limited */
-let lastWoodTime = 0;
-const WOOD_COOLDOWN = 0.05;
-const MAX_CONCURRENT_WOOD = 3;
-let activeWood = 0;
-
-export function playWoodHit(intensity: number) {
-  const ac = getCtx();
-  if (ac.state === "suspended") return;
-  const now = ac.currentTime;
-
-  if (now - lastWoodTime < WOOD_COOLDOWN) return;
-  if (activeWood >= MAX_CONCURRENT_WOOD) return;
-  lastWoodTime = now;
-  activeWood++;
-
+const woodSound = new RateLimitedSound(0.05, 3, (ac, now, intensity, onEnded) => {
   const vol = 0.015 + intensity * intensity * 0.25;
   const dur = 0.02 + intensity * 0.05;
 
-  // Short noise burst through a bandpass for woody character
   const len = Math.ceil(ac.sampleRate * dur);
   const buf = ac.createBuffer(1, len, ac.sampleRate);
   const data = buf.getChannelData(0);
@@ -86,7 +85,7 @@ export function playWoodHit(intensity: number) {
 
   const bp = ac.createBiquadFilter();
   bp.type = "bandpass";
-  bp.frequency.value = 800 + (1 - intensity) * 600; // higher pitch for lighter taps
+  bp.frequency.value = 800 + (1 - intensity) * 600;
   bp.Q.value = 2;
 
   const gain = ac.createGain();
@@ -96,9 +95,17 @@ export function playWoodHit(intensity: number) {
   src.connect(bp).connect(gain).connect(ac.destination);
   src.start(now);
   src.stop(now + dur);
-  src.onended = () => {
-    activeWood--;
-  };
+  src.onended = onEnded;
+});
+
+/** Short bounce thud — rate-limited to avoid overwhelming audio */
+export function playBounce(intensity: number) {
+  bounceSound.trigger(intensity);
+}
+
+/** Woody clack for box/polygon collisions — rate-limited */
+export function playWoodHit(intensity: number) {
+  woodSound.trigger(intensity);
 }
 
 /** Synthesized explosion: filtered noise burst + low-frequency boom */

@@ -1,4 +1,5 @@
 import * as planck from "planck";
+import { areWelded, bodyRadius } from "../../engine/Physics";
 import { BrushTool } from "./BrushTool";
 
 export const GLUE_RADIUS_PX = 28;
@@ -29,40 +30,18 @@ export class UnGlueTool extends BrushTool {
   readonly radiusPx = GLUE_RADIUS_PX;
 
   protected brushAction(bodies: planck.Body[]) {
+    const seen = new Set<planck.Joint>();
     const toDestroy: planck.Joint[] = [];
     for (const body of bodies) {
       for (let je = body.getJointList(); je; je = je.next) {
         const joint = je.joint;
         if (!joint || joint.getType() !== "weld-joint") continue;
-        if (!toDestroy.includes(joint)) toDestroy.push(joint);
+        if (!seen.has(joint)) {
+          seen.add(joint);
+          toDestroy.push(joint);
+        }
       }
     }
     for (const j of toDestroy) this.ctx.game.world.destroyJoint(j);
   }
-}
-
-function areWelded(a: planck.Body, b: planck.Body): boolean {
-  for (let je = a.getJointList(); je; je = je.next) {
-    const joint = je.joint;
-    if (!joint || joint.getType() !== "weld-joint") continue;
-    const other = joint.getBodyA() === a ? joint.getBodyB() : joint.getBodyA();
-    if (other === b) return true;
-  }
-  return false;
-}
-
-function bodyRadius(body: planck.Body): number {
-  let maxR = 0;
-  for (let f = body.getFixtureList(); f; f = f.getNext()) {
-    const shape = f.getShape();
-    if (shape.getType() === "circle") {
-      maxR = Math.max(maxR, (shape as planck.CircleShape).getRadius());
-    } else if (shape.getType() === "polygon") {
-      const aabb = new planck.AABB();
-      shape.computeAABB(aabb, planck.Transform.identity(), 0);
-      const ext = planck.Vec2.sub(aabb.upperBound, aabb.lowerBound);
-      maxR = Math.max(maxR, planck.Vec2.lengthOf(ext) / 2);
-    }
-  }
-  return maxR;
 }

@@ -7,15 +7,6 @@ import type { IRenderer } from "./IRenderer";
 import { bodyColor, OverlayRenderer } from "./OverlayRenderer";
 import { ParticleSystem } from "./ParticleSystem";
 
-// Re-export button constants so existing imports from Renderer still work
-export {
-  BTN_DIRECTION_OFFSET_Y,
-  BTN_HALF_HEIGHT,
-  BTN_HALF_WIDTH,
-  BTN_SPACING,
-  BTN_TOGGLE_OFFSET_Y,
-} from "./OverlayRenderer";
-
 /** Ocean surface wave displacement in world units */
 function oceanWave(wx: number): number {
   return Math.sin(wx * 0.8) * 2 + Math.sin(wx * 1.5) * 1;

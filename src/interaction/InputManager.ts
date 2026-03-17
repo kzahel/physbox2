@@ -16,12 +16,8 @@ import { RopeTool, SpringTool } from "./tools/RopeTool";
 import { ScaleTool } from "./tools/ScaleTool";
 import { SelectTool } from "./tools/SelectTool";
 
-// Re-export Tool type and constants/helpers that other modules need
+// Re-export Tool type that other modules need
 export type { Tool, ToolRenderInfo } from "./ToolHandler";
-export { ERASE_RADIUS_PX } from "./tools/EraseTool";
-export { GLUE_RADIUS_PX } from "./tools/GlueTool";
-export { GRAB_RADIUS_PX } from "./tools/GrabTool";
-export { hasMotor, isDirectional } from "./tools/SelectTool";
 
 const CREATION_TOOL_IDS: Tool[] = [
   "box",
