@@ -1,14 +1,13 @@
 import type * as planck from "planck";
 import * as THREE from "three";
-import { ERASE_RADIUS_PX, GLUE_RADIUS_PX, GRAB_RADIUS_PX, hasMotor, isDirectional } from "../interaction/InputManager";
-import type { Tool, ToolRenderInfo } from "../interaction/ToolHandler";
+import type { ToolRenderInfo } from "../interaction/ToolHandler";
 import type { FixtureStyle } from "./BodyUserData";
 import { getBodyUserData } from "./BodyUserData";
 import type { Camera } from "./Camera";
 import { KILL_Y, KILL_Y_TOP } from "./Game";
 import type { IRenderer } from "./IRenderer";
+import { bodyColor, OverlayRenderer } from "./OverlayRenderer";
 import { type Particle, ParticleSystem } from "./ParticleSystem";
-import { BTN_DIRECTION_OFFSET_Y, BTN_HALF_HEIGHT, BTN_HALF_WIDTH, BTN_SPACING, BTN_TOGGLE_OFFSET_Y } from "./Renderer";
 
 // ── Color parsing ──
 
@@ -31,27 +30,6 @@ function rgbaToOpacity(color: string): number {
   return parseColor(color).a;
 }
 
-// ── Cursor styles (same as Canvas renderer) ──
-
-interface CursorStyle {
-  radius: number;
-  stroke: string;
-  fill: string;
-}
-
-const TOOL_CURSORS: Partial<Record<Tool, CursorStyle>> = {
-  erase: { radius: ERASE_RADIUS_PX, stroke: "rgba(255, 80, 80, 0.7)", fill: "rgba(255, 80, 80, 0.1)" },
-  grab: { radius: GRAB_RADIUS_PX, stroke: "rgba(100, 200, 255, 0.5)", fill: "rgba(100, 200, 255, 0.05)" },
-  attach: { radius: 10, stroke: "rgba(255, 200, 50, 0.6)", fill: "rgba(255, 200, 50, 0.05)" },
-  detach: { radius: 10, stroke: "rgba(255, 100, 50, 0.6)", fill: "rgba(255, 100, 50, 0.05)" },
-  attract: { radius: 10, stroke: "rgba(50, 255, 150, 0.6)", fill: "rgba(50, 255, 150, 0.05)" },
-  ropetool: { radius: 10, stroke: "rgba(180, 160, 120, 0.6)", fill: "rgba(180, 160, 120, 0.05)" },
-  spring: { radius: 10, stroke: "rgba(180, 160, 120, 0.6)", fill: "rgba(180, 160, 120, 0.05)" },
-  glue: { radius: GLUE_RADIUS_PX, stroke: "rgba(255, 220, 50, 0.7)", fill: "rgba(255, 220, 50, 0.1)" },
-  unglue: { radius: GLUE_RADIUS_PX, stroke: "rgba(255, 120, 50, 0.7)", fill: "rgba(255, 120, 50, 0.1)" },
-  scale: { radius: 14, stroke: "rgba(180, 120, 255, 0.6)", fill: "rgba(180, 120, 255, 0.05)" },
-};
-
 // ── Geometry helpers ──
 
 const EXTRUDE_DEPTH = 0.6;
@@ -63,7 +41,6 @@ const EXTRUDE_DEPTH = 0.6;
  */
 function insetConvexPolygon(verts: { x: number; y: number }[], amount: number): { x: number; y: number }[] {
   const n = verts.length;
-  // Compute centroid to determine inward normal direction
   let cx = 0,
     cy = 0;
   for (const v of verts) {
@@ -73,7 +50,6 @@ function insetConvexPolygon(verts: { x: number; y: number }[], amount: number): 
   cx /= n;
   cy /= n;
 
-  // For each edge, compute the inward normal and offset line
   const edgeNormals: { nx: number; ny: number }[] = [];
   for (let i = 0; i < n; i++) {
     const a = verts[i];
@@ -81,10 +57,8 @@ function insetConvexPolygon(verts: { x: number; y: number }[], amount: number): 
     const dx = b.x - a.x,
       dy = b.y - a.y;
     const len = Math.hypot(dx, dy) || 1;
-    // Two candidate normals: (-dy, dx) and (dy, -dx)
     let nx = -dy / len,
       ny = dx / len;
-    // Pick the one pointing toward centroid
     const midX = (a.x + b.x) / 2,
       midY = (a.y + b.y) / 2;
     if (nx * (cx - midX) + ny * (cy - midY) < 0) {
@@ -94,13 +68,10 @@ function insetConvexPolygon(verts: { x: number; y: number }[], amount: number): 
     edgeNormals.push({ nx, ny });
   }
 
-  // For each vertex (intersection of edge i-1 and edge i offset lines)
   const result: { x: number; y: number }[] = [];
   for (let i = 0; i < n; i++) {
     const prevEdge = (i - 1 + n) % n;
-    const currEdge = i;
 
-    // Offset line for prevEdge: passes through (verts[prevEdge] + normal * amount)
     const a0 = verts[prevEdge];
     const a1 = verts[i];
     const nA = edgeNormals[prevEdge];
@@ -109,19 +80,16 @@ function insetConvexPolygon(verts: { x: number; y: number }[], amount: number): 
     const dAx = a1.x - a0.x,
       dAy = a1.y - a0.y;
 
-    // Offset line for currEdge: passes through (verts[i] + normal * amount)
     const b0 = verts[i];
     const b1 = verts[(i + 1) % n];
-    const nB = edgeNormals[currEdge];
+    const nB = edgeNormals[i];
     const pBx = b0.x + nB.nx * amount,
       pBy = b0.y + nB.ny * amount;
     const dBx = b1.x - b0.x,
       dBy = b1.y - b0.y;
 
-    // 2D line intersection: P_A + t * D_A = P_B + s * D_B
     const cross = dAx * dBy - dAy * dBx;
     if (Math.abs(cross) < 1e-10) {
-      // Parallel edges, just offset the vertex
       result.push({ x: a1.x + nA.nx * amount, y: a1.y + nA.ny * amount });
     } else {
       const t = ((pBx - pAx) * dBy - (pBy - pAy) * dBx) / cross;
@@ -133,7 +101,6 @@ function insetConvexPolygon(verts: { x: number; y: number }[], amount: number): 
 
 function createPolygonGeometry(verts: { x: number; y: number }[]): THREE.ExtrudeGeometry {
   const n = verts.length;
-  // Clamp bevel to smallest half-edge and half-depth
   let minEdge = Infinity;
   for (let i = 0; i < n; i++) {
     const a = verts[i];
@@ -142,7 +109,6 @@ function createPolygonGeometry(verts: { x: number; y: number }[]): THREE.Extrude
   }
   const bevel = Math.min(minEdge * 0.12, EXTRUDE_DEPTH * 0.3, 0.08);
 
-  // Properly inset the polygon so bevel fills back to collider boundary
   const inset = insetConvexPolygon(verts, bevel);
 
   const shape = new THREE.Shape();
@@ -162,7 +128,6 @@ function createPolygonGeometry(verts: { x: number; y: number }[]): THREE.Extrude
 
 // ── Body-to-mesh key ──
 
-/** Unique key for a fixture to detect shape changes. */
 function fixtureKey(body: planck.Body): string {
   let key = "";
   for (let f = body.getFixtureList(); f; f = f.getNext()) {
@@ -188,7 +153,6 @@ export class ThreeJSRenderer implements IRenderer {
   private scene: THREE.Scene;
   private camera3d: THREE.OrthographicCamera;
   private glRenderer: THREE.WebGLRenderer;
-  private toolInfo: ToolRenderInfo | null = null;
 
   // Debug bounding sphere wireframes
   private debugMeshes: THREE.LineSegments[] = [];
@@ -196,6 +160,7 @@ export class ThreeJSRenderer implements IRenderer {
   // Overlay canvas for 2D UI (tool cursors, buttons, text)
   private overlayCanvas: HTMLCanvasElement;
   private overlayCtx: CanvasRenderingContext2D;
+  private overlay: OverlayRenderer;
 
   // Body -> mesh sync
   private bodyMeshes = new Map<planck.Body, { group: THREE.Group; key: string }>();
@@ -309,10 +274,10 @@ export class ThreeJSRenderer implements IRenderer {
       "position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1;";
     this.container.appendChild(this.overlayCanvas);
     this.overlayCtx = this.overlayCanvas.getContext("2d")!;
+    this.overlay = new OverlayRenderer(this.overlayCtx, this.overlayCanvas, this.particles);
   }
 
   dispose() {
-    // Remove all meshes
     for (const [, entry] of this.bodyMeshes) {
       this.scene.remove(entry.group);
       entry.group.traverse((child) => {
@@ -354,7 +319,7 @@ export class ThreeJSRenderer implements IRenderer {
   }
 
   setInputManager(input: ToolRenderInfo) {
-    this.toolInfo = input;
+    this.overlay.setToolInfo(input);
   }
 
   drawWorld(world: planck.World, camera: Camera) {
@@ -373,7 +338,7 @@ export class ThreeJSRenderer implements IRenderer {
     this.camera3d.updateProjectionMatrix();
 
     // Update ocean/sky to always cover the visible viewport
-    const viewW = halfW * 2 + 2; // slight padding
+    const viewW = halfW * 2 + 2;
     const oceanH = Math.max(0, camera.y - KILL_Y + halfH);
     this.oceanMesh.scale.set(viewW, oceanH, 1);
     this.oceanMesh.position.set(camera.x, KILL_Y - oceanH / 2, -1);
@@ -402,7 +367,7 @@ export class ThreeJSRenderer implements IRenderer {
 
     // Clear and render 2D overlay
     this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
-    this.drawOverlay(world, camera);
+    this.overlay.drawOverlays(world, camera);
   }
 
   // ── Body sync ──
@@ -418,11 +383,9 @@ export class ThreeJSRenderer implements IRenderer {
 
       const existing = this.bodyMeshes.get(body);
       if (existing && existing.key === key) {
-        // Update transform
         existing.group.position.set(pos.x, pos.y, 0);
         existing.group.rotation.set(0, 0, angle);
       } else {
-        // Remove old if shape changed
         if (existing) {
           this.scene.remove(existing.group);
           existing.group.traverse((child) => {
@@ -432,7 +395,6 @@ export class ThreeJSRenderer implements IRenderer {
             }
           });
         }
-        // Create new
         const group = this.createBodyMeshes(body);
         group.position.set(pos.x, pos.y, 0);
         group.rotation.set(0, 0, angle);
@@ -441,7 +403,6 @@ export class ThreeJSRenderer implements IRenderer {
       }
     }
 
-    // Remove destroyed bodies
     for (const [body, entry] of this.bodyMeshes) {
       if (!seen.has(body)) {
         this.scene.remove(entry.group);
@@ -459,7 +420,7 @@ export class ThreeJSRenderer implements IRenderer {
   private createBodyMeshes(body: planck.Body): THREE.Group {
     const group = new THREE.Group();
     const ud = getBodyUserData(body);
-    const fillColor = ud?.fill ?? this.bodyColor(body);
+    const fillColor = ud?.fill ?? bodyColor(body);
     const threeColor = rgbaToThreeColor(fillColor);
     const opacity = rgbaToOpacity(fillColor);
     const isStatic = body.isStatic();
@@ -491,7 +452,6 @@ export class ThreeJSRenderer implements IRenderer {
         mesh.receiveShadow = true;
         group.add(mesh);
 
-        // Spoke line for rotation visibility
         const spokeGeo = new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(center.x, center.y, r + 0.01),
           new THREE.Vector3(center.x + r, center.y, r + 0.01),
@@ -539,7 +499,6 @@ export class ThreeJSRenderer implements IRenderer {
 
       const existing = this.jointLines.get(joint);
       if (existing) {
-        // Update positions
         this.updateJointGroup(existing, joint, a, b);
       } else {
         const group = this.createJointGroup(joint, a, b);
@@ -548,7 +507,6 @@ export class ThreeJSRenderer implements IRenderer {
       }
     }
 
-    // Remove destroyed joints
     for (const [joint, group] of this.jointLines) {
       if (!seen.has(joint)) {
         this.scene.remove(group);
@@ -581,7 +539,6 @@ export class ThreeJSRenderer implements IRenderer {
       group.add(new THREE.Line(geo, mat));
     }
 
-    // Anchor dots
     const dotGeo = new THREE.SphereGeometry(0.08, 8, 8);
     const dotMat = new THREE.MeshBasicMaterial({ color: 0x96c8ff, transparent: true, opacity: 0.6 });
     const dotA = new THREE.Mesh(dotGeo, dotMat);
@@ -607,7 +564,6 @@ export class ThreeJSRenderer implements IRenderer {
       positions.setXYZ(1, b.x, b.y, 0.5);
       positions.needsUpdate = true;
     }
-    // Update anchor dots
     const dotA = group.children[1] as THREE.Mesh;
     dotA.position.set(a.x, a.y, 0.5);
     const dotB = group.children[2] as THREE.Mesh;
@@ -665,7 +621,6 @@ export class ThreeJSRenderer implements IRenderer {
   // ── Debug bounding spheres ──
 
   private syncDebug() {
-    // Clear previous debug meshes
     for (const m of this.debugMeshes) {
       this.scene.remove(m);
       m.geometry.dispose();
@@ -678,7 +633,6 @@ export class ThreeJSRenderer implements IRenderer {
     const wireSphereMat = new THREE.LineBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
     const wireSphereMatParticles = new THREE.LineBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.6 });
 
-    // Body bounding spheres
     for (const [, entry] of this.bodyMeshes) {
       entry.group.traverse((child) => {
         if (child instanceof THREE.Mesh && child.geometry) {
@@ -688,7 +642,6 @@ export class ThreeJSRenderer implements IRenderer {
           const sphere = new THREE.SphereGeometry(bs.radius, 12, 8);
           const wireframe = new THREE.WireframeGeometry(sphere);
           const line = new THREE.LineSegments(wireframe, wireSphereMat.clone());
-          // Position in world space: group transform + local bounding sphere center
           const worldCenter = bs.center.clone().applyMatrix4(child.matrixWorld);
           line.position.copy(worldCenter);
           line.position.z = 0.5;
@@ -698,7 +651,6 @@ export class ThreeJSRenderer implements IRenderer {
       });
     }
 
-    // Particle system bounding sphere
     const pbs = this.pointsGeometry.boundingSphere;
     if (pbs && pbs.radius > 0) {
       const sphere = new THREE.SphereGeometry(pbs.radius, 16, 10);
@@ -708,312 +660,5 @@ export class ThreeJSRenderer implements IRenderer {
       this.scene.add(line);
       this.debugMeshes.push(line);
     }
-  }
-
-  // ── 2D Overlay (tool cursors, buttons, previews) ──
-
-  private drawOverlay(world: planck.World, camera: Camera) {
-    const ctx = this.overlayCtx;
-    // Dynamite wick effects (drawn in overlay)
-    this.drawDynamiteEffects(world, camera);
-
-    // Conveyor animation
-    this.drawConveyorAnimation(world, camera);
-
-    // Balloon strings
-    this.drawBalloonStrings(world, camera);
-
-    // Tool cursor
-    if (this.toolInfo?.toolCursor) {
-      const tool = this.toolInfo.tool;
-      const pos = this.toolInfo.toolCursor;
-      if (tool !== "scale" || !this.toolInfo?.scaleDrag) {
-        const style = TOOL_CURSORS[tool];
-        if (style) this.drawToolCursor(pos, style.radius, style.stroke, style.fill);
-      }
-    }
-
-    // Platform draw preview
-    if (this.toolInfo?.platformDraw) {
-      const tool = this.toolInfo.tool;
-      const isFan = tool === "fan";
-      const isCannon = tool === "cannon";
-      const isRocket = tool === "rocket";
-      const isConveyor = tool === "conveyor";
-      const { start, end } = this.toolInfo.platformDraw;
-      const s = camera.toScreen(start.x, start.y, this.glCanvas);
-      const e = camera.toScreen(end.x, end.y, this.glCanvas);
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(s.x, s.y);
-      ctx.lineTo(e.x, e.y);
-      const color = isFan
-        ? "rgba(120, 180, 220, 0.9)"
-        : isCannon
-          ? "rgba(180, 80, 80, 0.9)"
-          : isRocket
-            ? "rgba(200, 200, 220, 0.9)"
-            : isConveyor
-              ? "rgba(200, 160, 50, 0.9)"
-              : "rgba(80, 100, 80, 0.9)";
-      ctx.strokeStyle = color;
-      ctx.lineWidth = Math.max(4, 0.3 * camera.zoom);
-      ctx.lineCap = "round";
-      ctx.setLineDash([8, 6]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = color;
-      for (const p of [s, e]) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      if (isFan || isCannon || isRocket) {
-        const dx = e.x - s.x;
-        const dy = e.y - s.y;
-        const len = Math.hypot(dx, dy);
-        if (len > 10) {
-          const nx = dx / len;
-          const ny = dy / len;
-          ctx.beginPath();
-          ctx.moveTo(e.x, e.y);
-          ctx.lineTo(e.x - nx * 12 - ny * 8, e.y - ny * 12 + nx * 8);
-          ctx.moveTo(e.x, e.y);
-          ctx.lineTo(e.x - nx * 12 + ny * 8, e.y - ny * 12 - nx * 8);
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 2.5;
-          ctx.setLineDash([]);
-          ctx.stroke();
-        }
-      }
-      ctx.restore();
-    }
-
-    // Rope pending
-    if (this.toolInfo?.ropePending) {
-      const rp = this.toolInfo.ropePending;
-      const sp = rp.body
-        ? camera.toScreen(rp.body.getPosition().x, rp.body.getPosition().y, this.glCanvas)
-        : camera.toScreen(rp.x, rp.y, this.glCanvas);
-      this.drawToolCursor(sp, 16, "rgba(180, 160, 120, 0.9)", "rgba(180, 160, 120, 0.15)");
-    }
-
-    // Attach pending
-    if (this.toolInfo?.attachPending) {
-      const body = this.toolInfo.attachPending.body;
-      const bpos = body.getPosition();
-      const sp = camera.toScreen(bpos.x, bpos.y, this.glCanvas);
-      this.drawToolCursor(sp, 16, "rgba(255, 200, 50, 0.9)", "rgba(255, 200, 50, 0.15)");
-    }
-
-    // Scale preview
-    if (this.toolInfo?.scaleDrag) {
-      const sd = this.toolInfo.scaleDrag;
-      const bpos = sd.body.getPosition();
-      const sp = camera.toScreen(bpos.x, bpos.y, this.glCanvas);
-      const ringSize = 20 * sd.currentScale;
-      this.drawToolCursor(sp, ringSize, "rgba(180, 120, 255, 0.8)", "rgba(180, 120, 255, 0.1)");
-      ctx.fillStyle = "#fff";
-      ctx.font = "bold 13px system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(`${sd.currentScale.toFixed(1)}x`, sp.x, sp.y - ringSize - 14);
-    }
-
-    // Select tool UI
-    if (this.toolInfo?.selectedBody) {
-      const body = this.toolInfo.selectedBody;
-      const bpos = body.getPosition();
-      const sp = camera.toScreen(bpos.x, bpos.y, this.glCanvas);
-      this.drawToolCursor(sp, 20, "rgba(100, 200, 255, 0.8)", "rgba(100, 200, 255, 0.08)");
-      this.drawToggleButton(sp, body.isStatic());
-      let nextBtnY = BTN_DIRECTION_OFFSET_Y;
-      if (isDirectional(body)) {
-        this.drawDirectionButton(sp, nextBtnY);
-        nextBtnY += BTN_SPACING;
-      }
-      this.drawMotorButton(sp, nextBtnY, hasMotor(body));
-    }
-  }
-
-  // ── Overlay drawing helpers ──
-
-  private drawToolCursor(pos: { x: number; y: number }, radius: number, stroke: string, fill: string) {
-    const ctx = this.overlayCtx;
-    ctx.beginPath();
-    ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = stroke;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
-    ctx.stroke();
-    ctx.fillStyle = fill;
-    ctx.fill();
-    ctx.setLineDash([]);
-  }
-
-  private drawPillButton(x: number, y: number, label: string, bg: string) {
-    const ctx = this.overlayCtx;
-    const h = BTN_HALF_HEIGHT * 2;
-    ctx.beginPath();
-    ctx.roundRect(x - BTN_HALF_WIDTH, y - BTN_HALF_HEIGHT, BTN_HALF_WIDTH * 2, h, h / 2);
-    ctx.fillStyle = bg;
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 11px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(label, x, y);
-  }
-
-  private drawToggleButton(bodyScreen: { x: number; y: number }, isStatic: boolean) {
-    this.drawPillButton(
-      bodyScreen.x,
-      bodyScreen.y - BTN_TOGGLE_OFFSET_Y,
-      isStatic ? "Fixed" : "Free",
-      isStatic ? "rgba(200, 80, 80, 0.85)" : "rgba(80, 160, 80, 0.85)",
-    );
-  }
-
-  private drawDirectionButton(bodyScreen: { x: number; y: number }, offsetY = BTN_DIRECTION_OFFSET_Y) {
-    this.drawPillButton(bodyScreen.x, bodyScreen.y - offsetY, "\u21C4 Flip", "rgba(100, 140, 255, 0.85)");
-  }
-
-  private drawMotorButton(bodyScreen: { x: number; y: number }, offsetY: number, active: boolean) {
-    this.drawPillButton(
-      bodyScreen.x,
-      bodyScreen.y - offsetY,
-      "\u2699 Motor",
-      active ? "rgba(255, 160, 50, 0.85)" : "rgba(120, 120, 140, 0.85)",
-    );
-  }
-
-  private drawConveyorAnimation(world: planck.World, camera: Camera) {
-    const ctx = this.overlayCtx;
-    const time = performance.now() / 1000;
-
-    for (let body = world.getBodyList(); body; body = body.getNext()) {
-      const ud = getBodyUserData(body);
-      if (ud?.label !== "conveyor") continue;
-
-      const speed = ud.speed ?? 3;
-      const pos = body.getPosition();
-      const angle = body.getAngle();
-      const fixture = body.getFixtureList();
-      if (!fixture) continue;
-      const shape = fixture.getShape() as planck.PolygonShape;
-      const hw = Math.abs(shape.m_vertices[0].x);
-
-      ctx.save();
-      const screen = camera.toScreen(pos.x, pos.y, this.glCanvas);
-      ctx.translate(screen.x, screen.y);
-      ctx.rotate(-angle);
-
-      const spacing = 0.8;
-      const offset = (time * speed) % spacing;
-      const count = Math.ceil((hw * 2) / spacing) + 1;
-      const chevronSize = 0.15 * camera.zoom;
-
-      ctx.strokeStyle = "rgba(255,255,255,0.5)";
-      ctx.lineWidth = Math.max(1, 0.06 * camera.zoom);
-      ctx.lineCap = "round";
-
-      for (let i = 0; i < count; i++) {
-        const lx = (-hw + offset + i * spacing) * camera.zoom;
-        if (Math.abs(lx) > hw * camera.zoom) continue;
-        const ly = 0;
-        const dir = speed > 0 ? 1 : -1;
-        ctx.beginPath();
-        ctx.moveTo(lx - chevronSize * dir, ly - chevronSize);
-        ctx.lineTo(lx, ly);
-        ctx.lineTo(lx - chevronSize * dir, ly + chevronSize);
-        ctx.stroke();
-      }
-
-      ctx.restore();
-    }
-  }
-
-  private drawBalloonStrings(world: planck.World, camera: Camera) {
-    const ctx = this.overlayCtx;
-    for (let body = world.getBodyList(); body; body = body.getNext()) {
-      const ud = getBodyUserData(body);
-      if (ud?.label !== "balloon") continue;
-
-      const pos = body.getPosition();
-      const angle = body.getAngle();
-      const fixture = body.getFixtureList();
-      if (!fixture) continue;
-      const shape = fixture.getShape() as planck.CircleShape;
-      const radius = shape.getRadius();
-
-      const bottomX = pos.x - Math.sin(angle) * radius;
-      const bottomY = pos.y - Math.cos(angle) * radius;
-      const stringLen = radius * 3;
-      const sp = camera.toScreen(bottomX, bottomY, this.glCanvas);
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(sp.x, sp.y);
-      const segments = 3;
-      const segLen = (stringLen * camera.zoom) / segments;
-      for (let i = 0; i < segments; i++) {
-        const wobble = (i % 2 === 0 ? 1 : -1) * 4;
-        ctx.quadraticCurveTo(sp.x + wobble, sp.y + segLen * (i + 0.5), sp.x, sp.y + segLen * (i + 1));
-      }
-      ctx.strokeStyle = ud.fill ?? "rgba(200,200,200,0.6)";
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-      ctx.restore();
-    }
-  }
-
-  private drawDynamiteEffects(world: planck.World, camera: Camera) {
-    const ctx = this.overlayCtx;
-
-    for (let body = world.getBodyList(); body; body = body.getNext()) {
-      const ud = getBodyUserData(body);
-      if (ud?.label !== "dynamite" || ud.fuseRemaining == null || !ud.fuseDuration) continue;
-
-      const remaining = Math.max(0, ud.fuseRemaining / ud.fuseDuration);
-
-      const pos = body.getPosition();
-      const angle = body.getAngle();
-
-      const wickBaseX = pos.x + Math.sin(-angle) * 0.4;
-      const wickBaseY = pos.y + Math.cos(-angle) * 0.4;
-      const wickLen = 0.5 * remaining;
-      const wickEndX = wickBaseX + Math.sin(-angle) * wickLen;
-      const wickEndY = wickBaseY + Math.cos(-angle) * wickLen;
-
-      const wbSp = camera.toScreen(wickBaseX, wickBaseY, this.glCanvas);
-      const weSp = camera.toScreen(wickEndX, wickEndY, this.glCanvas);
-
-      ctx.beginPath();
-      ctx.moveTo(wbSp.x, wbSp.y);
-      ctx.lineTo(weSp.x, weSp.y);
-      ctx.strokeStyle = "rgba(80,60,40,0.9)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      if (remaining > 0) {
-        this.particles.spawnSpark(wickEndX, wickEndY);
-        ctx.beginPath();
-        ctx.arc(weSp.x, weSp.y, 4 + Math.random() * 3, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,${150 + Math.floor(Math.random() * 100)},50,${0.5 + Math.random() * 0.3})`;
-        ctx.fill();
-      }
-    }
-  }
-
-  // ── Helpers ──
-
-  private bodyColor(body: planck.Body): string {
-    if (body.isStatic()) return "rgba(80,80,100,0.8)";
-    if (body.isKinematic()) return "rgba(100,180,100,0.6)";
-    const ud = getBodyUserData(body);
-    return ud?.fill ?? "rgba(120,160,255,0.6)";
   }
 }
