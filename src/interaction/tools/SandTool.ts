@@ -53,6 +53,7 @@ export class SandTool implements ToolHandler {
         position: planck.Vec2(wx, wy),
         bullet: false,
         fixedRotation: true,
+        linearDamping: 0.5,
       });
 
       body.createFixture({
