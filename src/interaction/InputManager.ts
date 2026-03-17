@@ -44,6 +44,8 @@ const CREATION_TOOL_IDS: Tool[] = [
   "train",
 ];
 
+const PLATFORM_TOOL_IDS: Tool[] = ["platform", "conveyor", "fan", "cannon", "rocket"];
+
 export class InputManager implements ToolRenderInfo {
   tool: Tool = "grab";
 
@@ -98,11 +100,7 @@ export class InputManager implements ToolRenderInfo {
 
     // Create tool handlers
     this.grabTool = new GrabTool(ctx);
-    const eraseTool = new EraseTool(ctx);
-    const glueTool = new GlueTool(ctx);
-    const unGlueTool = new UnGlueTool(ctx);
     this.attachTool = new AttachTool(ctx);
-    const detachTool = new DetachTool(ctx);
     this.ropeTool = new RopeTool(ctx);
     this.springTool = new SpringTool(ctx);
     this.attractTool = new AttractTool(ctx);
@@ -111,54 +109,28 @@ export class InputManager implements ToolRenderInfo {
     this.drawTool = new DrawTool(ctx);
 
     // Platform-draw family
-    const platformTool = new PlatformDrawTool(ctx, "platform");
-    const conveyorTool = new PlatformDrawTool(ctx, "conveyor");
-    const fanTool = new PlatformDrawTool(ctx, "fan");
-    const cannonTool = new PlatformDrawTool(ctx, "cannon");
-    const rocketTool = new PlatformDrawTool(ctx, "rocket");
-    this.platformTools = new Map<Tool, PlatformDrawTool>([
-      ["platform", platformTool],
-      ["conveyor", conveyorTool],
-      ["fan", fanTool],
-      ["cannon", cannonTool],
-      ["rocket", rocketTool],
-    ]);
+    this.platformTools = new Map<Tool, PlatformDrawTool>(
+      PLATFORM_TOOL_IDS.map((t) => [t, new PlatformDrawTool(ctx, t)]),
+    );
 
-    // Creation tools
-    const creationTools: Partial<Record<Tool, CreationTool>> = {};
-    for (const t of CREATION_TOOL_IDS) {
-      creationTools[t] = new CreationTool(ctx, t);
-    }
-
-    this.handlers = {
+    // Build handlers map: individual tools + platform tools + creation tools
+    const h: Partial<Record<Tool, ToolHandler>> = {
       grab: this.grabTool,
-      erase: eraseTool,
-      glue: glueTool,
-      unglue: unGlueTool,
+      erase: new EraseTool(ctx),
+      glue: new GlueTool(ctx),
+      unglue: new UnGlueTool(ctx),
       attach: this.attachTool,
-      detach: detachTool,
+      detach: new DetachTool(ctx),
       ropetool: this.ropeTool,
       spring: this.springTool,
       attract: this.attractTool,
       select: this.selectTool,
       scale: this.scaleTool,
-      platform: platformTool,
-      conveyor: conveyorTool,
-      fan: fanTool,
-      cannon: cannonTool,
-      rocket: rocketTool,
-      box: creationTools.box!,
-      ball: creationTools.ball!,
-      car: creationTools.car!,
-      springball: creationTools.springball!,
-      launcher: creationTools.launcher!,
-      seesaw: creationTools.seesaw!,
-      balloon: creationTools.balloon!,
-      ragdoll: creationTools.ragdoll!,
-      dynamite: creationTools.dynamite!,
-      train: creationTools.train!,
       draw: this.drawTool,
     };
+    for (const [id, tool] of this.platformTools) h[id] = tool;
+    for (const t of CREATION_TOOL_IDS) h[t] = new CreationTool(ctx, t);
+    this.handlers = h as Record<Tool, ToolHandler>;
 
     this.ragdollController = new RagdollController(game, this.keys);
     this.attractTool.ensureContactListener();

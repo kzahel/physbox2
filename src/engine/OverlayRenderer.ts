@@ -1,20 +1,13 @@
 import type * as planck from "planck";
+import { BTN_HALF_HEIGHT, BTN_HALF_WIDTH, getSelectionButtons, hasMotor } from "../interaction/SelectionButtons";
 import type { Tool, ToolRenderInfo } from "../interaction/ToolHandler";
 import { ERASE_RADIUS_PX } from "../interaction/tools/EraseTool";
 import { GLUE_RADIUS_PX } from "../interaction/tools/GlueTool";
 import { GRAB_RADIUS_PX } from "../interaction/tools/GrabTool";
-import { hasMotor, isDirectional } from "../interaction/tools/SelectTool";
 import { getBodyUserData, isBalloon, isConveyor, isDynamite } from "./BodyUserData";
 import type { Camera } from "./Camera";
 import type { IParticleSystem } from "./IRenderer";
 import { forEachBody } from "./Physics";
-
-/** Button dimensions shared with SelectTool for hit detection */
-export const BTN_HALF_WIDTH = 38;
-export const BTN_HALF_HEIGHT = 9;
-export const BTN_TOGGLE_OFFSET_Y = 30;
-export const BTN_DIRECTION_OFFSET_Y = 55;
-export const BTN_SPACING = 25;
 
 interface CursorStyle {
   radius: number;
@@ -200,13 +193,19 @@ export class OverlayRenderer {
     const bpos = body.getPosition();
     const sp = camera.toScreen(bpos.x, bpos.y, this.canvas);
     this.drawToolCursor(sp, 20, "rgba(100, 200, 255, 0.8)", "rgba(100, 200, 255, 0.08)");
-    this.drawToggleButton(sp, body.isStatic());
-    let nextBtnY = BTN_DIRECTION_OFFSET_Y;
-    if (isDirectional(body)) {
-      this.drawDirectionButton(sp, nextBtnY);
-      nextBtnY += BTN_SPACING;
+    for (const btn of getSelectionButtons(body)) {
+      switch (btn.id) {
+        case "toggle":
+          this.drawToggleButton(sp, btn.offsetY, body.isStatic());
+          break;
+        case "direction":
+          this.drawDirectionButton(sp, btn.offsetY);
+          break;
+        case "motor":
+          this.drawMotorButton(sp, btn.offsetY, hasMotor(body));
+          break;
+      }
     }
-    this.drawMotorButton(sp, nextBtnY, hasMotor(body));
   }
 
   // ── Body-specific effects ──
@@ -434,16 +433,16 @@ export class OverlayRenderer {
     ctx.fillText(label, x, y);
   }
 
-  private drawToggleButton(bodyScreen: { x: number; y: number }, isStatic: boolean) {
+  private drawToggleButton(bodyScreen: { x: number; y: number }, offsetY: number, isStatic: boolean) {
     this.drawPillButton(
       bodyScreen.x,
-      bodyScreen.y - BTN_TOGGLE_OFFSET_Y,
+      bodyScreen.y - offsetY,
       isStatic ? "Fixed" : "Free",
       isStatic ? "rgba(200, 80, 80, 0.85)" : "rgba(80, 160, 80, 0.85)",
     );
   }
 
-  private drawDirectionButton(bodyScreen: { x: number; y: number }, offsetY = BTN_DIRECTION_OFFSET_Y) {
+  private drawDirectionButton(bodyScreen: { x: number; y: number }, offsetY: number) {
     this.drawPillButton(bodyScreen.x, bodyScreen.y - offsetY, "\u21C4 Flip", "rgba(100, 140, 255, 0.85)");
   }
 

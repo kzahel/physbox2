@@ -82,41 +82,42 @@ export class ParticleSystem implements IParticleSystem {
     });
   }
 
-  spawnMuzzleFlash(wx: number, wy: number) {
-    this.emit(wx, wy, 10, () => {
+  /** Radial burst: particles emitted in random directions from a point */
+  private radialBurst(
+    wx: number,
+    wy: number,
+    count: number,
+    speed: [number, number],
+    life: [number, number],
+    size: [number, number],
+    color: { r: number; g: [number, number]; b: number },
+  ) {
+    this.emit(wx, wy, count, () => {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 1 + Math.random() * 3;
-      const life = 0.15 + Math.random() * 0.25;
+      const s = speed[0] + Math.random() * speed[1];
+      const l = life[0] + Math.random() * life[1];
       return {
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life,
-        maxLife: life,
-        size: 0.08 + Math.random() * 0.12,
-        r: 255,
-        g: 180 + Math.floor(Math.random() * 75),
-        b: 0,
+        vx: Math.cos(angle) * s,
+        vy: Math.sin(angle) * s,
+        life: l,
+        maxLife: l,
+        size: size[0] + Math.random() * size[1],
+        r: color.r,
+        g: color.g[0] + Math.floor(Math.random() * color.g[1]),
+        b: color.b,
       };
     });
   }
 
+  spawnMuzzleFlash(wx: number, wy: number) {
+    this.radialBurst(wx, wy, 10, [1, 3], [0.15, 0.25], [0.08, 0.12], { r: 255, g: [180, 75], b: 0 });
+  }
+
   spawnExplosion(wx: number, wy: number) {
-    this.emit(wx, wy, 40, () => {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 2 + Math.random() * 6;
-      const life = 0.4 + Math.random() * 0.6;
-      const isSmoke = Math.random() < 0.3;
-      return {
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life,
-        maxLife: life,
-        size: isSmoke ? 0.3 + Math.random() * 0.4 : 0.1 + Math.random() * 0.2,
-        r: isSmoke ? 80 : 255,
-        g: isSmoke ? 80 : 100 + Math.floor(Math.random() * 155),
-        b: isSmoke ? 80 : 0,
-      };
-    });
+    // Fire particles
+    this.radialBurst(wx, wy, 28, [2, 6], [0.4, 0.6], [0.1, 0.2], { r: 255, g: [100, 155], b: 0 });
+    // Smoke particles
+    this.radialBurst(wx, wy, 12, [2, 6], [0.4, 0.6], [0.3, 0.4], { r: 80, g: [80, 1], b: 80 });
   }
 
   spawnFlame(wx: number, wy: number, bodyAngle: number) {
