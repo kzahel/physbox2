@@ -46,6 +46,9 @@ export class CreationTool implements ToolHandler {
       case "dynamite":
         game.addDynamite(wx, wy);
         break;
+      case "train":
+        game.addTrain(wx, wy);
+        break;
     }
   }
 }

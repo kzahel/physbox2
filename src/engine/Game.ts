@@ -15,6 +15,7 @@ import { applyRocketThrust, createRocket } from "../prefabs/Rocket";
 import { createChainRope, createRopeBetween } from "../prefabs/Rope";
 import { createSeesaw } from "../prefabs/Seesaw";
 import { createSpringBall } from "../prefabs/SpringBall";
+import { createTrain } from "../prefabs/Train";
 import { playBounce, playWoodHit, unlockAudio } from "./Audio";
 import { Camera } from "./Camera";
 import type { IRenderer } from "./IRenderer";
@@ -231,6 +232,10 @@ export class Game {
 
   addConveyor(x: number, y: number, w = 6, speed = 3, angle = 0) {
     return createConveyor(this.world, x, y, w, speed, angle);
+  }
+
+  addTrain(x: number, y: number) {
+    return createTrain(this.world, x, y);
   }
 
   addDynamite(x: number, y: number, fuseTime = 3) {

@@ -62,7 +62,7 @@ export function getBodyLabel(body: import("planck").Body): string | undefined {
 
 export function isDirectional(body: import("planck").Body): boolean {
   const label = getBodyLabel(body);
-  return label === "car" || label === "conveyor" || label === "rocket" || hasMotor(body);
+  return label === "car" || label === "train" || label === "conveyor" || label === "rocket" || hasMotor(body);
 }
 
 export function hasMotor(body: import("planck").Body): boolean {
@@ -72,7 +72,7 @@ export function hasMotor(body: import("planck").Body): boolean {
 
 function reverseDirection(body: import("planck").Body, world: import("planck").World) {
   const label = getBodyLabel(body);
-  if (label === "car") {
+  if (label === "car" || label === "train") {
     for (let j = world.getJointList(); j; j = j.getNext()) {
       if (j.getType() === "wheel-joint" && (j.getBodyA() === body || j.getBodyB() === body)) {
         const wj = j as import("planck").WheelJoint;

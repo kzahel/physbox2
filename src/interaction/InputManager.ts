@@ -46,7 +46,8 @@ export type Tool =
   | "ragdoll"
   | "cannon"
   | "glue"
-  | "unglue";
+  | "unglue"
+  | "train";
 
 const CREATION_TOOL_IDS: Tool[] = [
   "box",
@@ -58,6 +59,7 @@ const CREATION_TOOL_IDS: Tool[] = [
   "balloon",
   "ragdoll",
   "dynamite",
+  "train",
 ];
 
 export class InputManager {
@@ -168,6 +170,7 @@ export class InputManager {
       balloon: creationTools.balloon!,
       ragdoll: creationTools.ragdoll!,
       dynamite: creationTools.dynamite!,
+      train: creationTools.train!,
     };
 
     this.ragdollController = new RagdollController(game, this.keys);
