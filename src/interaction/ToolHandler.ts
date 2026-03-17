@@ -79,4 +79,5 @@ export type Tool =
   | "unglue"
   | "train"
   | "draw"
-  | "water";
+  | "water"
+  | "sand";

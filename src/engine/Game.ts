@@ -55,6 +55,7 @@ export class Game {
   physicsHz = DEFAULT_PHYSICS_HZ;
   inputManager: InputManager | null = null;
   water = new WaterSystem();
+  sandBodies: planck.Body[] = [];
   ragdolls: RagdollData[] = [];
   followSelected = false;
   followBody: planck.Body | null = null;
@@ -320,6 +321,7 @@ export class Game {
     this.bindBounciness();
     this.bindCollisionSounds();
     this.ragdolls.length = 0;
+    this.sandBodies.length = 0;
     this.water.clear();
     this.followBody = null;
     this.accumulator = 0;
@@ -406,6 +408,11 @@ export class Game {
       this.world.destroyBody(b);
     }
     this.bodyCount = count;
+
+    // Prune sand tracking array of destroyed bodies
+    if (toRemove.length > 0 && this.sandBodies.length > 0) {
+      this.sandBodies = this.sandBodies.filter((b) => b.isActive());
+    }
   }
 
   private updateCameraFollow() {

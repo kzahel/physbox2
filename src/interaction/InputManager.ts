@@ -15,6 +15,7 @@ import { PlatformDrawTool } from "./tools/PlatformDrawTool";
 import { RopeTool, SpringTool } from "./tools/RopeTool";
 import { ScaleTool } from "./tools/ScaleTool";
 import { SelectTool } from "./tools/SelectTool";
+import { SandTool } from "./tools/SandTool";
 import { WaterTool } from "./tools/WaterTool";
 
 // Re-export Tool type that other modules need
@@ -129,6 +130,7 @@ export class InputManager implements ToolRenderInfo {
       scale: this.scaleTool,
       draw: this.drawTool,
       water: new WaterTool(ctx),
+      sand: new SandTool(ctx),
     };
     for (const [id, tool] of this.platformTools) h[id] = tool;
     for (const t of CREATION_TOOL_IDS) h[t] = new CreationTool(ctx, t);

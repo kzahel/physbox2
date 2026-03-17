@@ -51,6 +51,10 @@ export interface ConveyorData extends BodyDataBase {
   speed: number;
 }
 
+export interface SandData extends BodyDataBase {
+  label: "sand";
+}
+
 /** Bodies with a generic or no label (ground, wall, rope links, etc.) */
 export interface GenericBodyData extends BodyDataBase {
   label?: string;
@@ -64,6 +68,7 @@ export type BodyUserData =
   | CannonData
   | CannonballData
   | ConveyorData
+  | SandData
   | GenericBodyData;
 
 /** Type-safe accessor for body userData */
@@ -99,6 +104,10 @@ export function isCannonball(ud: BodyUserData | null): ud is CannonballData {
 
 export function isConveyor(ud: BodyUserData | null): ud is ConveyorData {
   return ud?.label === "conveyor";
+}
+
+export function isSand(ud: BodyUserData | null): ud is SandData {
+  return ud?.label === "sand";
 }
 
 /** Fixture-level style data */
