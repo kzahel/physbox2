@@ -107,6 +107,27 @@ export class Game {
     });
   }
 
+  /** Compute a 0–1 volume multiplier based on zoom level and whether the
+   *  collision point is within (or near) the current viewport. */
+  private collisionVolume(wx: number, wy: number): number {
+    // Zoom attenuation: default zoom is 30. Fade to near-silence below ~5.
+    const zoomFactor = Math.min(1, Math.max(0, (this.camera.zoom - 2) / 28));
+    // Square the curve so it drops off faster when zoomed out
+    const zoomVol = zoomFactor * zoomFactor;
+
+    // Viewport proximity: attenuate sounds outside the visible area
+    const vp = this.container;
+    const halfW = vp.clientWidth / 2 / this.camera.zoom;
+    const halfH = vp.clientHeight / 2 / this.camera.zoom;
+    const dx = Math.max(0, Math.abs(wx - this.camera.x) - halfW);
+    const dy = Math.max(0, Math.abs(wy - this.camera.y) - halfH);
+    // Distance outside viewport in world units; fade over ~10m
+    const offscreen = Math.sqrt(dx * dx + dy * dy);
+    const proximityVol = Math.max(0, 1 - offscreen / 10);
+
+    return zoomVol * proximityVol;
+  }
+
   private bindCollisionSounds() {
     this.world.on("post-solve", (contact, impulse) => {
       const ni = impulse.normalImpulses[0];
@@ -118,14 +139,20 @@ export class Game {
       const udB = getBodyUserData(fB.getBody());
       if (udA?.label === "polygon" || udB?.label === "polygon") return;
 
+      // Use midpoint of the two bodies as the collision location
+      const pA = fA.getBody().getPosition();
+      const pB = fB.getBody().getPosition();
+      const vol = this.collisionVolume((pA.x + pB.x) / 2, (pA.y + pB.y) / 2);
+      if (vol < 0.01) return;
+
       const tA = fA.getShape().getType();
       const tB = fB.getShape().getType();
       const intensity = Math.min(1, (ni - COLLISION_MIN_IMPULSE) / (COLLISION_MAX_IMPULSE - COLLISION_MIN_IMPULSE));
 
       if (tA === "circle" || tB === "circle") {
-        playBounce(intensity);
+        playBounce(intensity, vol);
       } else if (tA === "polygon" || tB === "polygon") {
-        playWoodHit(intensity);
+        playWoodHit(intensity, vol);
       }
     });
   }
