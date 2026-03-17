@@ -1,4 +1,6 @@
 import * as planck from "planck";
+
+import { createRopeBetween } from "../prefabs/Rope";
 import type { Game } from "./Game";
 import { createWeldJoint, forEachBody, markDestroyed } from "./Physics";
 
@@ -56,9 +58,19 @@ interface SerializedJoint {
   userData?: unknown;
 }
 
+interface SerializedRope {
+  bodyAId: number | null; // null = standalone static anchor
+  bodyBId: number | null;
+  x1: number;
+  y1: number; // world-space attachment point A
+  x2: number;
+  y2: number; // world-space attachment point B
+}
+
 interface SceneData {
   bodies: SerializedBody[];
   joints: SerializedJoint[];
+  ropes?: SerializedRope[];
   gravity: number;
 }
 
@@ -245,12 +257,73 @@ const JOINT_CODECS: Record<string, JointCodec> = {
 
 // ── Serialize / Deserialize ──
 
+/** Check if a body is part of a rope's internal structure */
+function isRopeInternal(b: planck.Body): boolean {
+  const ud = b.getUserData() as { label?: string } | null;
+  return ud?.label === "ropeLink" || ud?.label === "ropeAnchor";
+}
+
 export function serializeScene(game: Game): SceneData {
+  // ── Identify rope components to exclude from normal serialization ──
+  const ropeBodies = new Set<planck.Body>();
+  const ropeJoints = new Set<planck.Joint>();
+  const ropes: SerializedRope[] = [];
+
+  // First: find all rope-internal bodies
+  forEachBody(game.world, (b) => {
+    if (isRopeInternal(b)) ropeBodies.add(b);
+  });
+
+  // Find main RopeJoints to extract rope metadata, and mark all rope-related joints
+  for (let j = game.world.getJointList(); j; j = j.getNext()) {
+    const ud = j.getUserData() as { ropeStabilizer?: boolean; isMainRope?: boolean } | null;
+
+    // All stabilizer/rope joints (main + interior) are rope-internal
+    if (ud?.ropeStabilizer) {
+      ropeJoints.add(j);
+      continue;
+    }
+
+    // RevoluteJoints between rope links are rope-internal
+    const bA = j.getBodyA();
+    const bB = j.getBodyB();
+    if (ropeBodies.has(bA) || ropeBodies.has(bB)) {
+      ropeJoints.add(j);
+    }
+  }
+
+  // Extract rope metadata from main RopeJoints
+  // (second pass so all ropeBodies are identified first)
+  for (let j = game.world.getJointList(); j; j = j.getNext()) {
+    const ud = j.getUserData() as { ropeStabilizer?: boolean; isMainRope?: boolean } | null;
+    if (!ud?.isMainRope) continue;
+
+    const bA = j.getBodyA();
+    const bB = j.getBodyB();
+    const anchorA = bA.getWorldPoint((j as any).m_localAnchorA);
+    const anchorB = bB.getWorldPoint((j as any).m_localAnchorB);
+
+    // bodyA/bodyB: null if rope-created anchor, will be resolved to ID below
+    ropes.push({
+      bodyAId: ropeBodies.has(bA) ? null : -1, // placeholder, resolved after bodyMap built
+      bodyBId: ropeBodies.has(bB) ? null : -1,
+      x1: anchorA.x,
+      y1: anchorA.y,
+      x2: anchorB.x,
+      y2: anchorB.y,
+      _bodyA: ropeBodies.has(bA) ? null : bA,
+      _bodyB: ropeBodies.has(bB) ? null : bB,
+    } as any);
+  }
+
+  // ── Serialize non-rope bodies ──
   const bodyMap = new Map<planck.Body, number>();
   const bodies: SerializedBody[] = [];
   let nextId = 0;
 
   forEachBody(game.world, (b) => {
+    if (ropeBodies.has(b)) return;
+
     const id = nextId++;
     bodyMap.set(b, id);
 
@@ -306,8 +379,20 @@ export function serializeScene(game: Game): SceneData {
     });
   });
 
+  // Resolve rope body references to IDs
+  for (const r of ropes) {
+    const raw = r as any;
+    r.bodyAId = raw._bodyA ? (bodyMap.get(raw._bodyA) ?? null) : null;
+    r.bodyBId = raw._bodyB ? (bodyMap.get(raw._bodyB) ?? null) : null;
+    delete raw._bodyA;
+    delete raw._bodyB;
+  }
+
+  // ── Serialize non-rope joints ──
   const joints: SerializedJoint[] = [];
   for (let j = game.world.getJointList(); j; j = j.getNext()) {
+    if (ropeJoints.has(j)) continue;
+
     const bodyAId = bodyMap.get(j.getBodyA());
     const bodyBId = bodyMap.get(j.getBodyB());
     if (bodyAId === undefined || bodyBId === undefined) continue;
@@ -330,7 +415,7 @@ export function serializeScene(game: Game): SceneData {
     joints.push(sj);
   }
 
-  return { bodies, joints, gravity: game.gravity };
+  return { bodies, joints, ropes: ropes.length > 0 ? ropes : undefined, gravity: game.gravity };
 }
 
 export function deserializeScene(game: Game, data: SceneData) {
@@ -398,6 +483,15 @@ export function deserializeScene(game: Game, data: SceneData) {
     const anchorB = planck.Vec2(sj.anchorBX ?? sj.anchorX, sj.anchorBY ?? sj.anchorY);
 
     JOINT_CODECS[sj.type]?.deserialize(sj, bodyA, bodyB, anchorA, anchorB, game.world);
+  }
+
+  // Recreate ropes from metadata (recipe-based, not physics state)
+  if (data.ropes) {
+    for (const r of data.ropes) {
+      const bodyA = r.bodyAId !== null ? (idToBody.get(r.bodyAId) ?? null) : null;
+      const bodyB = r.bodyBId !== null ? (idToBody.get(r.bodyBId) ?? null) : null;
+      createRopeBetween(game.world, r.x1, r.y1, r.x2, r.y2, bodyA, bodyB);
+    }
   }
 
   // Re-create the InputManager ground body

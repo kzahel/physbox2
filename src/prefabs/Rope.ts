@@ -1,4 +1,5 @@
 import * as planck from "planck";
+import { clamp } from "../engine/Physics";
 
 // Rope link physics
 const MAX_ROPE_LINKS = 30;
@@ -32,7 +33,7 @@ export function createChainRope(world: planck.World, x: number, y: number, links
       density: LINK_DENSITY,
       friction: LINK_FRICTION,
     });
-    link.setUserData({ fill: LINK_COLOR });
+    link.setUserData({ fill: LINK_COLOR, label: "ropeLink" });
 
     world.createJoint(
       planck.RevoluteJoint({ collideConnected: true }, prev, link, planck.Vec2(x, y - i * linkLen - linkLen / 2)),
@@ -54,7 +55,7 @@ export function createRopeBetween(
   const dx = x2 - x1;
   const dy = y2 - y1;
   const dist = Math.hypot(dx, dy);
-  const links = Math.max(2, Math.min(MAX_ROPE_LINKS, Math.round(dist / 0.4)));
+  const links = clamp(Math.round(dist / 0.4), 2, MAX_ROPE_LINKS);
   const linkLen = dist / links;
   const stepX = dx / links;
   const stepY = dy / links;
@@ -67,6 +68,7 @@ export function createRopeBetween(
   } else {
     anchorA = world.createBody({ type: "static", position: planck.Vec2(x1, y1) });
     anchorA.createFixture({ shape: planck.Circle(ANCHOR_RADIUS) });
+    anchorA.setUserData({ label: "ropeAnchor" });
     prev = anchorA;
   }
 
@@ -86,7 +88,7 @@ export function createRopeBetween(
       density: LINK_DENSITY,
       friction: LINK_FRICTION,
     });
-    link.setUserData({ fill: LINK_COLOR });
+    link.setUserData({ fill: LINK_COLOR, label: "ropeLink" });
 
     const jx = x1 + stepX * (i - 0.5);
     const jy = y1 + stepY * (i - 0.5);
@@ -101,6 +103,7 @@ export function createRopeBetween(
   } else {
     end = world.createBody({ type: "static", position: planck.Vec2(x2, y2) });
     end.createFixture({ shape: planck.Circle(ANCHOR_RADIUS) });
+    end.setUserData({ label: "ropeAnchor" });
   }
 
   const jx = x1 + stepX * (links - 0.5);
@@ -121,7 +124,7 @@ export function createRopeBetween(
         localAnchorB: localB,
         maxLength: dist,
         collideConnected: true,
-        userData: { ropeStabilizer: true, restLength: dist, chainBodies: [...chainLinks] },
+        userData: { ropeStabilizer: true, isMainRope: true, restLength: dist, chainBodies: [...chainLinks] },
       } as planck.RopeJointDef),
     );
 
