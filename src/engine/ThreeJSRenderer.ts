@@ -62,12 +62,6 @@ const TOOL_CURSORS: Partial<Record<Tool, CursorStyle>> = {
 const EXTRUDE_DEPTH = 0.4;
 
 function createPolygonGeometry(verts: { x: number; y: number }[]): THREE.ExtrudeGeometry {
-  const shape = new THREE.Shape();
-  shape.moveTo(verts[0].x, verts[0].y);
-  for (let i = 1; i < verts.length; i++) {
-    shape.lineTo(verts[i].x, verts[i].y);
-  }
-  shape.closePath();
   // Scale bevel proportionally to the shape size
   let maxDist = 0;
   for (const v of verts) {
@@ -75,6 +69,15 @@ function createPolygonGeometry(verts: { x: number; y: number }[]): THREE.Extrude
     if (d > maxDist) maxDist = d;
   }
   const bevel = maxDist * 0.08;
+
+  // Inset vertices by bevel size so the bevel fills back out to the collider boundary
+  const insetVerts = insetPolygon(verts, bevel);
+  const shape = new THREE.Shape();
+  shape.moveTo(insetVerts[0].x, insetVerts[0].y);
+  for (let i = 1; i < insetVerts.length; i++) {
+    shape.lineTo(insetVerts[i].x, insetVerts[i].y);
+  }
+  shape.closePath();
   return new THREE.ExtrudeGeometry(shape, {
     depth: EXTRUDE_DEPTH,
     bevelEnabled: true,
@@ -82,6 +85,35 @@ function createPolygonGeometry(verts: { x: number; y: number }[]): THREE.Extrude
     bevelSize: bevel,
     bevelSegments: 1,
   });
+}
+
+/** Shrink a polygon inward by `amount` along each edge normal. */
+function insetPolygon(verts: { x: number; y: number }[], amount: number): { x: number; y: number }[] {
+  const n = verts.length;
+  const result: { x: number; y: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    const prev = verts[(i - 1 + n) % n];
+    const curr = verts[i];
+    const next = verts[(i + 1) % n];
+
+    // Inward normals of the two edges meeting at this vertex
+    const e1x = curr.x - prev.x, e1y = curr.y - prev.y;
+    const e2x = next.x - curr.x, e2y = next.y - curr.y;
+    // Inward normals (assuming CCW winding from Planck)
+    const n1x = e1y, n1y = -e1x;
+    const n2x = e2y, n2y = -e2x;
+    const len1 = Math.hypot(n1x, n1y) || 1;
+    const len2 = Math.hypot(n2x, n2y) || 1;
+    // Average inward direction
+    const nx = n1x / len1 + n2x / len2;
+    const ny = n1y / len1 + n2y / len2;
+    const len = Math.hypot(nx, ny) || 1;
+    // Scale so the offset along each edge normal is `amount`
+    const dot = (nx / len) * (n1x / len1) + (ny / len) * (n1y / len1);
+    const scale = dot > 0.1 ? amount / dot : amount;
+    result.push({ x: curr.x + (nx / len) * scale, y: curr.y + (ny / len) * scale });
+  }
+  return result;
 }
 
 // ── Body-to-mesh key ──
