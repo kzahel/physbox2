@@ -29,6 +29,28 @@ interface SerializedJoint {
   bodyB: number;
   anchorX: number;
   anchorY: number;
+  // Second anchor (for distance joints etc.)
+  anchorBX?: number;
+  anchorBY?: number;
+  // DistanceJoint
+  frequencyHz?: number;
+  dampingRatio?: number;
+  length?: number;
+  collideConnected?: boolean;
+  // RevoluteJoint
+  enableLimit?: boolean;
+  lowerAngle?: number;
+  upperAngle?: number;
+  enableMotor?: boolean;
+  motorSpeed?: number;
+  maxMotorTorque?: number;
+  // WheelJoint
+  axisX?: number;
+  axisY?: number;
+  // PrismaticJoint
+  lowerTranslation?: number;
+  upperTranslation?: number;
+  maxMotorForce?: number;
 }
 
 interface SceneData {
@@ -112,14 +134,61 @@ export function serializeScene(game: Game): SceneData {
     const bodyBId = bodyMap.get(j.getBodyB());
     if (bodyAId === undefined || bodyBId === undefined) continue;
 
-    const anchor = j.getAnchorA();
-    joints.push({
+    const anchorA = j.getAnchorA();
+    const anchorB = j.getAnchorB();
+    const sj: SerializedJoint = {
       type: j.getType(),
       bodyA: bodyAId,
       bodyB: bodyBId,
-      anchorX: anchor.x,
-      anchorY: anchor.y,
-    });
+      anchorX: anchorA.x,
+      anchorY: anchorA.y,
+      anchorBX: anchorB.x,
+      anchorBY: anchorB.y,
+      collideConnected: j.getCollideConnected(),
+    };
+
+    const jType = j.getType();
+    if (jType === "distance-joint") {
+      const dj = j as planck.DistanceJoint;
+      sj.frequencyHz = dj.getFrequency();
+      sj.dampingRatio = dj.getDampingRatio();
+      sj.length = dj.getLength();
+    } else if (jType === "revolute-joint") {
+      const rj = j as planck.RevoluteJoint;
+      sj.enableLimit = rj.isLimitEnabled();
+      sj.lowerAngle = rj.getLowerLimit();
+      sj.upperAngle = rj.getUpperLimit();
+      sj.enableMotor = rj.isMotorEnabled();
+      sj.motorSpeed = rj.getMotorSpeed();
+      sj.maxMotorTorque = rj.getMaxMotorTorque();
+    } else if (jType === "wheel-joint") {
+      const wj = j as planck.WheelJoint;
+      sj.enableMotor = wj.isMotorEnabled();
+      sj.motorSpeed = wj.getMotorSpeed();
+      sj.maxMotorTorque = wj.getMaxMotorTorque();
+      sj.frequencyHz = wj.getSpringFrequencyHz();
+      sj.dampingRatio = wj.getSpringDampingRatio();
+      const axis = (wj as any).m_localXAxisA;
+      if (axis) {
+        sj.axisX = axis.x;
+        sj.axisY = axis.y;
+      }
+    } else if (jType === "prismatic-joint") {
+      const pj = j as planck.PrismaticJoint;
+      sj.enableLimit = pj.isLimitEnabled();
+      sj.lowerTranslation = pj.getLowerLimit();
+      sj.upperTranslation = pj.getUpperLimit();
+      sj.enableMotor = pj.isMotorEnabled();
+      sj.motorSpeed = pj.getMotorSpeed();
+      sj.maxMotorForce = pj.getMaxMotorForce();
+      const axis = (pj as any).m_localXAxisA;
+      if (axis) {
+        sj.axisX = axis.x;
+        sj.axisY = axis.y;
+      }
+    }
+
+    joints.push(sj);
   }
 
   return { bodies, joints, gravity: game.gravity };
@@ -188,13 +257,88 @@ export function deserializeScene(game: Game, data: SceneData) {
     const bodyB = idToBody.get(sj.bodyB);
     if (!bodyA || !bodyB) continue;
 
-    const anchor = planck.Vec2(sj.anchorX, sj.anchorY);
+    const anchorA = planck.Vec2(sj.anchorX, sj.anchorY);
+    const anchorB = planck.Vec2(sj.anchorBX ?? sj.anchorX, sj.anchorBY ?? sj.anchorY);
+
     switch (sj.type) {
       case "weld-joint":
-        game.world.createJoint(planck.WeldJoint({}, bodyA, bodyB, anchor));
+        game.world.createJoint(planck.WeldJoint({ collideConnected: sj.collideConnected }, bodyA, bodyB, anchorA));
         break;
       case "revolute-joint":
-        game.world.createJoint(planck.RevoluteJoint({}, bodyA, bodyB, anchor));
+        game.world.createJoint(
+          planck.RevoluteJoint(
+            {
+              collideConnected: sj.collideConnected,
+              enableLimit: sj.enableLimit,
+              lowerAngle: sj.lowerAngle,
+              upperAngle: sj.upperAngle,
+              enableMotor: sj.enableMotor,
+              motorSpeed: sj.motorSpeed,
+              maxMotorTorque: sj.maxMotorTorque,
+            },
+            bodyA,
+            bodyB,
+            anchorA,
+          ),
+        );
+        break;
+      case "distance-joint": {
+        const joint = planck.DistanceJoint(
+          {
+            frequencyHz: sj.frequencyHz,
+            dampingRatio: sj.dampingRatio,
+            length: sj.length,
+            collideConnected: sj.collideConnected ?? true,
+          },
+          bodyA,
+          bodyB,
+          anchorA,
+          anchorB,
+        );
+        // Set local anchors precisely (mirrors Game.addSpring)
+        const localA = bodyA.getLocalPoint(anchorA);
+        const localB = bodyB.getLocalPoint(anchorB);
+        (joint as any).m_localAnchorA = localA;
+        (joint as any).m_localAnchorB = localB;
+        game.world.createJoint(joint);
+        break;
+      }
+      case "wheel-joint":
+        game.world.createJoint(
+          planck.WheelJoint(
+            {
+              enableMotor: sj.enableMotor,
+              motorSpeed: sj.motorSpeed,
+              maxMotorTorque: sj.maxMotorTorque,
+              frequencyHz: sj.frequencyHz,
+              dampingRatio: sj.dampingRatio,
+              collideConnected: sj.collideConnected,
+            },
+            bodyA,
+            bodyB,
+            anchorB,
+            planck.Vec2(sj.axisX ?? 0, sj.axisY ?? 1),
+          ),
+        );
+        break;
+      case "prismatic-joint":
+        game.world.createJoint(
+          planck.PrismaticJoint(
+            {
+              enableLimit: sj.enableLimit,
+              lowerTranslation: sj.lowerTranslation,
+              upperTranslation: sj.upperTranslation,
+              enableMotor: sj.enableMotor,
+              motorSpeed: sj.motorSpeed,
+              maxMotorForce: sj.maxMotorForce,
+              collideConnected: sj.collideConnected,
+            },
+            bodyA,
+            bodyB,
+            anchorA,
+            planck.Vec2(sj.axisX ?? 1, sj.axisY ?? 0),
+          ),
+        );
         break;
     }
   }
