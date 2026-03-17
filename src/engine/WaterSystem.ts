@@ -189,6 +189,7 @@ export class WaterSystem {
 
       world.rayCast(from, to, (fixture, point, _normal, fraction) => {
         if (fixture.isSensor()) return -1; // skip sensors
+        if (fixture.getBody().isDynamic()) return -1; // skip dynamic bodies
         if (point.y > bestY) {
           bestY = point.y;
         }
@@ -220,11 +221,9 @@ export class WaterSystem {
   private hasWall(world: planck.World, fromX: number, toX: number, y: number): boolean {
     let hit = false;
     world.rayCast(planck.Vec2(fromX, y), planck.Vec2(toX, y), (fixture) => {
-      if (!fixture.isSensor()) {
-        hit = true;
-        return 0; // stop
-      }
-      return -1; // skip sensors
+      if (fixture.isSensor() || fixture.getBody().isDynamic()) return -1;
+      hit = true;
+      return 0; // stop
     });
     return hit;
   }
