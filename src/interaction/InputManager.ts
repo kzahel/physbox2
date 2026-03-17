@@ -19,6 +19,18 @@ import { SelectTool } from "./tools/SelectTool";
 // Re-export Tool type that other modules need
 export type { Tool, ToolRenderInfo } from "./ToolHandler";
 
+const PAN_SPEED = 8;
+const WASD_DIRECTIONS: [string, number, number][] = [
+  ["w", 0, 1],
+  ["W", 0, 1],
+  ["s", 0, -1],
+  ["S", 0, -1],
+  ["a", -1, 0],
+  ["A", -1, 0],
+  ["d", 1, 0],
+  ["D", 1, 0],
+];
+
 const CREATION_TOOL_IDS: Tool[] = [
   "box",
   "ball",
@@ -54,6 +66,8 @@ export class InputManager implements ToolRenderInfo {
   // Touch state
   private lastTouches: { id: number; x: number; y: number }[] = [];
   private touchToolFired = false;
+  /** Stored so the pan loop can be cancelled on cleanup */
+  panRAF = 0;
 
   // Tool handlers
   private handlers: Record<Tool, ToolHandler>;
@@ -242,13 +256,14 @@ export class InputManager implements ToolRenderInfo {
     window.addEventListener("keyup", (e) => this.keys.delete(e.key));
 
     // Camera pan with WASD
-    const panSpeed = 8;
     const tick = () => {
-      if (this.keys.has("w") || this.keys.has("W")) this.game.camera.y += panSpeed / this.game.camera.zoom;
-      if (this.keys.has("s") || this.keys.has("S")) this.game.camera.y -= panSpeed / this.game.camera.zoom;
-      if (this.keys.has("a") || this.keys.has("A")) this.game.camera.x -= panSpeed / this.game.camera.zoom;
-      if (this.keys.has("d") || this.keys.has("D")) this.game.camera.x += panSpeed / this.game.camera.zoom;
-      requestAnimationFrame(tick);
+      for (const [key, dx, dy] of WASD_DIRECTIONS) {
+        if (this.keys.has(key)) {
+          this.game.camera.x += (dx * PAN_SPEED) / this.game.camera.zoom;
+          this.game.camera.y += (dy * PAN_SPEED) / this.game.camera.zoom;
+        }
+      }
+      this.panRAF = requestAnimationFrame(tick);
     };
     tick();
   }

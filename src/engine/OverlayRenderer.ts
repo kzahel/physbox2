@@ -35,6 +35,16 @@ const TOOL_CURSORS: Partial<Record<Tool, CursorStyle>> = {
   draw: { radius: 6, stroke: "rgba(120, 200, 160, 0.7)", fill: "rgba(120, 200, 160, 0.1)" },
 };
 
+// Conveyor animation
+const CONVEYOR_SPACING = 0.8;
+const CONVEYOR_CHEVRON_SCALE = 0.15;
+
+// Balloon string rendering
+const BALLOON_STRING_LENGTH_FACTOR = 3;
+const BALLOON_STRING_SEGMENTS = 3;
+const BALLOON_STRING_WOBBLE = 4;
+const BALLOON_SHINE_SCALE = 0.3;
+
 const PLATFORM_PREVIEW_COLORS: Partial<Record<Tool, string>> = {
   fan: "rgba(120, 180, 220, 0.9)",
   cannon: "rgba(180, 80, 80, 0.9)",
@@ -215,17 +225,16 @@ export class OverlayRenderer {
       ctx.translate(screen.x, screen.y);
       ctx.rotate(-angle);
 
-      const spacing = 0.8;
-      const offset = (time * speed) % spacing;
-      const count = Math.ceil((hw * 2) / spacing) + 1;
-      const chevronSize = 0.15 * camera.zoom;
+      const offset = (time * speed) % CONVEYOR_SPACING;
+      const count = Math.ceil((hw * 2) / CONVEYOR_SPACING) + 1;
+      const chevronSize = CONVEYOR_CHEVRON_SCALE * camera.zoom;
 
       ctx.strokeStyle = "rgba(255,255,255,0.5)";
       ctx.lineWidth = Math.max(1, 0.06 * camera.zoom);
       ctx.lineCap = "round";
 
       for (let i = 0; i < count; i++) {
-        const lx = (-hw + offset + i * spacing) * camera.zoom;
+        const lx = (-hw + offset + i * CONVEYOR_SPACING) * camera.zoom;
         if (Math.abs(lx) > hw * camera.zoom) continue;
         const ly = 0;
         const dir = speed > 0 ? 1 : -1;
@@ -255,16 +264,15 @@ export class OverlayRenderer {
 
       const bottomX = pos.x - Math.sin(angle) * radius;
       const bottomY = pos.y - Math.cos(angle) * radius;
-      const stringLen = radius * 3;
+      const stringLen = radius * BALLOON_STRING_LENGTH_FACTOR;
       const sp = camera.toScreen(bottomX, bottomY, this.canvas);
 
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(sp.x, sp.y);
-      const segments = 3;
-      const segLen = (stringLen * camera.zoom) / segments;
-      for (let i = 0; i < segments; i++) {
-        const wobble = (i % 2 === 0 ? 1 : -1) * 4;
+      const segLen = (stringLen * camera.zoom) / BALLOON_STRING_SEGMENTS;
+      for (let i = 0; i < BALLOON_STRING_SEGMENTS; i++) {
+        const wobble = (i % 2 === 0 ? 1 : -1) * BALLOON_STRING_WOBBLE;
         ctx.quadraticCurveTo(sp.x + wobble, sp.y + segLen * (i + 0.5), sp.x, sp.y + segLen * (i + 1));
       }
       ctx.strokeStyle = ud.fill ?? "rgba(200,200,200,0.6)";
@@ -273,7 +281,7 @@ export class OverlayRenderer {
 
       // Highlight / shine on the balloon
       const center = camera.toScreen(pos.x, pos.y, this.canvas);
-      const shineR = radius * camera.zoom * 0.3;
+      const shineR = radius * camera.zoom * BALLOON_SHINE_SCALE;
       ctx.beginPath();
       ctx.arc(center.x - shineR, center.y - shineR, shineR, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(255,255,255,0.25)";

@@ -45,25 +45,31 @@ export class ParticleSystem implements IParticleSystem {
     }
   }
 
-  private emit(x: number, y: number, count: number, gen: () => Omit<Particle, "x" | "y">) {
+  private emit(
+    x: number,
+    y: number,
+    count: number,
+    gen: () => (Omit<Particle, "x" | "y"> & { ox?: number; oy?: number }) | null,
+  ) {
     for (let i = 0; i < count; i++) {
-      this._particles.push({ x, y, ...gen() });
+      const p = gen();
+      if (!p) continue;
+      const { ox = 0, oy = 0, ...rest } = p;
+      this._particles.push({ x: x + ox, y: y + oy, ...rest });
     }
   }
 
   spawnWind(wx: number, wy: number, angle: number, range: number) {
     const dirX = Math.cos(angle);
     const dirY = Math.sin(angle);
-    for (let i = 0; i < 2; i++) {
-      if (Math.random() > 0.6) continue;
+    this.emit(wx, wy, 2, () => {
+      if (Math.random() > 0.6) return null;
       const spread = (Math.random() - 0.5) * 1.5;
-      const perpX = -dirY * spread;
-      const perpY = dirX * spread;
       const speed = 3 + Math.random() * 4;
       const life = (range / speed) * (0.4 + Math.random() * 0.4);
-      this._particles.push({
-        x: wx + dirX * 0.5 + perpX,
-        y: wy + dirY * 0.5 + perpY,
+      return {
+        ox: dirX * 0.5 + -dirY * spread,
+        oy: dirY * 0.5 + dirX * spread,
         vx: dirX * speed + (Math.random() - 0.5) * 0.5,
         vy: dirY * speed + (Math.random() - 0.5) * 0.5,
         life,
@@ -72,8 +78,8 @@ export class ParticleSystem implements IParticleSystem {
         r: 180,
         g: 210,
         b: 240,
-      });
-    }
+      };
+    });
   }
 
   spawnMuzzleFlash(wx: number, wy: number) {
@@ -116,14 +122,14 @@ export class ParticleSystem implements IParticleSystem {
   spawnFlame(wx: number, wy: number, bodyAngle: number) {
     const exDirX = Math.sin(bodyAngle);
     const exDirY = -Math.cos(bodyAngle);
-    for (let i = 0; i < 2; i++) {
+    this.emit(wx, wy, 2, () => {
       const spread = (Math.random() - 0.5) * 1.5;
       const speed = 3 + Math.random() * 4;
       const life = 0.15 + Math.random() * 0.25;
       const isSmoke = Math.random() < 0.2;
-      this._particles.push({
-        x: wx + (Math.random() - 0.5) * 0.2,
-        y: wy + (Math.random() - 0.5) * 0.2,
+      return {
+        ox: (Math.random() - 0.5) * 0.2,
+        oy: (Math.random() - 0.5) * 0.2,
         vx: exDirX * speed + spread,
         vy: exDirY * speed + spread,
         life,
@@ -132,8 +138,8 @@ export class ParticleSystem implements IParticleSystem {
         r: isSmoke ? 100 : 255,
         g: isSmoke ? 100 : 150 + Math.floor(Math.random() * 105),
         b: isSmoke ? 100 : 0,
-      });
-    }
+      };
+    });
   }
 
   spawnSpark(wx: number, wy: number) {
