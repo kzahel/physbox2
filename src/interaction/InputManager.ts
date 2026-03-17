@@ -323,54 +323,60 @@ export class InputManager implements ToolRenderInfo {
     const cur = this.snapTouches(e);
 
     if (cur.length >= 2 && this.lastTouches.length >= 2) {
-      // Two-finger gesture — cancel tool, do pan+zoom
-      this.touchToolFired = true;
-      this.handler.reset?.();
-      this.stopMultiPlace();
-
-      const prevA = this.lastTouches[0];
-      const prevB = this.lastTouches[1];
-      const curA = cur[0];
-      const curB = cur[1];
-
-      const dx = (curA.x + curB.x - prevA.x - prevB.x) / 2;
-      const dy = (curA.y + curB.y - prevA.y - prevB.y) / 2;
-      this.game.camera.pan(dx, dy);
-
-      const prevDist = this.touchDist(prevA, prevB);
-      const curDist = this.touchDist(curA, curB);
-      if (prevDist > 0) {
-        const midX = (curA.x + curB.x) / 2;
-        const midY = (curA.y + curB.y) / 2;
-        this.game.camera.zoomAt(midX, midY, curDist / prevDist, this.game.container);
-      }
+      this.handleTwoFingerGesture(cur);
     } else if (cur.length === 1 && this.lastTouches.length >= 1) {
-      const t = cur[0];
-      this.toolCursor = { x: t.x, y: t.y };
-      const world = this.game.camera.toWorld(t.x, t.y, this.game.container);
-      const prev = this.lastTouches.find((lt) => lt.id === t.id) ?? this.lastTouches[0];
-      const dx = t.x - prev.x;
-      const dy = t.y - prev.y;
-
-      const h = this.handler;
-      const dragMode = h.touchDragMode;
-
-      if (dragMode === "drag") {
-        h.onMove?.(world.x, world.y, dx, dy, t.x, t.y);
-      } else if (dragMode === "brush") {
-        h.onBrush?.(world.x, world.y, t.x, t.y);
-        this.touchToolFired = true;
-      } else if (this.multiPlaceInterval) {
-        this.lastMouse = { x: t.x, y: t.y };
-      } else if (this.multiPlace && h.isCreationTool) {
-        h.onDown?.(world.x, world.y, t.x, t.y);
-        this.lastMouse = { x: t.x, y: t.y };
-        this.startMultiPlace();
-        this.touchToolFired = true;
-      }
+      this.handleSingleFingerDrag(cur[0]);
     }
 
     this.lastTouches = cur;
+  }
+
+  private handleTwoFingerGesture(cur: { id: number; x: number; y: number }[]) {
+    this.touchToolFired = true;
+    this.handler.reset?.();
+    this.stopMultiPlace();
+
+    const prevA = this.lastTouches[0];
+    const prevB = this.lastTouches[1];
+    const curA = cur[0];
+    const curB = cur[1];
+
+    const dx = (curA.x + curB.x - prevA.x - prevB.x) / 2;
+    const dy = (curA.y + curB.y - prevA.y - prevB.y) / 2;
+    this.game.camera.pan(dx, dy);
+
+    const prevDist = this.touchDist(prevA, prevB);
+    const curDist = this.touchDist(curA, curB);
+    if (prevDist > 0) {
+      const midX = (curA.x + curB.x) / 2;
+      const midY = (curA.y + curB.y) / 2;
+      this.game.camera.zoomAt(midX, midY, curDist / prevDist, this.game.container);
+    }
+  }
+
+  private handleSingleFingerDrag(t: { id: number; x: number; y: number }) {
+    this.toolCursor = { x: t.x, y: t.y };
+    const world = this.game.camera.toWorld(t.x, t.y, this.game.container);
+    const prev = this.lastTouches.find((lt) => lt.id === t.id) ?? this.lastTouches[0];
+    const dx = t.x - prev.x;
+    const dy = t.y - prev.y;
+
+    const h = this.handler;
+    const dragMode = h.touchDragMode;
+
+    if (dragMode === "drag") {
+      h.onMove?.(world.x, world.y, dx, dy, t.x, t.y);
+    } else if (dragMode === "brush") {
+      h.onBrush?.(world.x, world.y, t.x, t.y);
+      this.touchToolFired = true;
+    } else if (this.multiPlaceInterval) {
+      this.lastMouse = { x: t.x, y: t.y };
+    } else if (this.multiPlace && h.isCreationTool) {
+      h.onDown?.(world.x, world.y, t.x, t.y);
+      this.lastMouse = { x: t.x, y: t.y };
+      this.startMultiPlace();
+      this.touchToolFired = true;
+    }
   }
 
   private onTouchEnd(e: TouchEvent) {

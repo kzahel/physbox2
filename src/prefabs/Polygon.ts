@@ -1,42 +1,11 @@
 import * as planck from "planck";
+import { convexHull } from "../engine/ConvexHull";
 
 /** Maximum vertices Planck.js allows per polygon */
 const MAX_VERTS = 8;
 
 /** Minimum area (world units²) to create a polygon */
 const MIN_AREA = 0.05;
-
-/**
- * Convex hull via Andrew's monotone chain algorithm.
- * Returns vertices in CCW order.
- */
-function convexHull(points: { x: number; y: number }[]): { x: number; y: number }[] {
-  const pts = points.slice().sort((a, b) => a.x - b.x || a.y - b.y);
-  if (pts.length <= 1) return pts;
-
-  const cross = (o: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) =>
-    (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
-
-  // Lower hull
-  const lower: { x: number; y: number }[] = [];
-  for (const p of pts) {
-    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
-    lower.push(p);
-  }
-
-  // Upper hull
-  const upper: { x: number; y: number }[] = [];
-  for (let i = pts.length - 1; i >= 0; i--) {
-    const p = pts[i];
-    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
-    upper.push(p);
-  }
-
-  // Remove last point of each half (it's the first point of the other)
-  lower.pop();
-  upper.pop();
-  return lower.concat(upper);
-}
 
 /**
  * Simplify a convex hull to at most `maxVerts` vertices by iteratively
