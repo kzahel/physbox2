@@ -215,7 +215,6 @@ export class ThreeJSRenderer implements IRenderer {
     });
     this.pointsMesh = new THREE.Points(this.pointsGeometry, this.pointsMaterial);
     this.pointsMesh.position.z = 1;
-    this.pointsMesh.frustumCulled = false;
     this.scene.add(this.pointsMesh);
 
     // Overlay canvas for 2D UI (tool cursors, buttons, text)
@@ -570,6 +569,7 @@ export class ThreeJSRenderer implements IRenderer {
     this.pointsGeometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     this.pointsGeometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
     this.pointsGeometry.setDrawRange(0, count);
+    this.pointsGeometry.computeBoundingSphere();
   }
 
   // ── 2D Overlay (tool cursors, buttons, previews) ──
