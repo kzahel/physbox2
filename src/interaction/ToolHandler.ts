@@ -29,10 +29,53 @@ export interface ToolHandler {
   /** Whether this tool supports multi-place (hold to spam) */
   isCreationTool?: boolean;
 
+  /** If true, touch-start fires onDown immediately (grab, scale, draw, platform, brush tools) */
+  immediateTouch?: boolean;
+
+  /** Touch-move behavior: 'drag' calls onMove, 'brush' calls onBrush. Undefined = no touch-drag */
+  touchDragMode?: "drag" | "brush";
+
   /** Clean up any pending state when switching away from this tool */
   reset?(): void;
-
-  // ── Renderer-visible state ──
-  // Tools expose whatever state the Renderer needs to draw previews.
-  // Each tool type defines its own shape; Renderer checks via type guards.
 }
+
+/** State exposed by InputManager to renderers for drawing tool overlays */
+export interface ToolRenderInfo {
+  readonly tool: Tool;
+  readonly toolCursor: { x: number; y: number } | null;
+  readonly selectedBody: planck.Body | null;
+  readonly attachPending: { body: planck.Body; world: { x: number; y: number } } | null;
+  readonly ropePending: { body: planck.Body | null; x: number; y: number } | null;
+  readonly scaleDrag: { body: planck.Body; startScreenY: number; currentScale: number } | null;
+  readonly platformDraw: { start: { x: number; y: number }; end: { x: number; y: number } } | null;
+  readonly drawPoints: readonly { x: number; y: number }[];
+}
+
+export type Tool =
+  | "box"
+  | "ball"
+  | "platform"
+  | "car"
+  | "springball"
+  | "launcher"
+  | "conveyor"
+  | "dynamite"
+  | "ropetool"
+  | "spring"
+  | "grab"
+  | "erase"
+  | "attach"
+  | "detach"
+  | "attract"
+  | "select"
+  | "seesaw"
+  | "rocket"
+  | "scale"
+  | "balloon"
+  | "fan"
+  | "ragdoll"
+  | "cannon"
+  | "glue"
+  | "unglue"
+  | "train"
+  | "draw";

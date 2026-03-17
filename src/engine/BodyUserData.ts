@@ -19,8 +19,14 @@ export interface BodyUserData {
   // Balloon
   lift?: number;
   // Dynamite
-  fuseStart?: number;
+  fuseRemaining?: number;
   fuseDuration?: number;
+  // Cannon
+  cannonCooldown?: number;
+  // Cannonball
+  lifetime?: number;
+  exploded?: boolean;
+  parentCannon?: import("planck").Body;
   // Destruction flag (cannon balls, dynamite, etc.)
   destroyed?: boolean;
 }

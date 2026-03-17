@@ -3,10 +3,10 @@ import type { InputManager } from "../interaction/InputManager";
 import { createBall } from "../prefabs/Ball";
 import { applyBalloonLift, createBalloon } from "../prefabs/Balloon";
 import { createBox } from "../prefabs/Box";
-import { createCannon } from "../prefabs/Cannon";
+import { createCannon, tickCannons } from "../prefabs/Cannon";
 import { createCar } from "../prefabs/Car";
 import { createConveyor } from "../prefabs/Conveyor";
-import { createDynamite } from "../prefabs/Dynamite";
+import { createDynamite, tickDynamite } from "../prefabs/Dynamite";
 import { applyFanForce, createFan } from "../prefabs/Fan";
 import { createLauncher } from "../prefabs/Launcher";
 import { createPlatform } from "../prefabs/Platform";
@@ -225,7 +225,7 @@ export class Game {
   }
 
   addCannon(x: number, y: number, angle: number) {
-    return createCannon(this.world, this.renderer, (wx, wy, r, f) => this.explodeAt(wx, wy, r, f), x, y, angle);
+    return createCannon(this.world, x, y, angle);
   }
 
   addFan(x: number, y: number, angle: number, force = 15, range = 10) {
@@ -241,7 +241,7 @@ export class Game {
   }
 
   addDynamite(x: number, y: number, fuseTime = 3) {
-    return createDynamite(this.world, (wx, wy, r, f) => this.explodeAt(wx, wy, r, f), x, y, fuseTime);
+    return createDynamite(this.world, x, y, fuseTime);
   }
 
   // --- Physics utilities ---
@@ -328,13 +328,16 @@ export class Game {
   }
 
   private stepPhysics(dt: number) {
+    const scaledDt = dt * this.timeScale;
     this.inputManager?.update();
-    applyRocketThrust(this.world, this.renderer, dt * this.timeScale);
+    applyRocketThrust(this.world, this.renderer, scaledDt);
     applyBalloonLift(this.world);
     applyFanForce(this.world, this.renderer);
     applyMotorTorque(this.world);
     applyRopeStabilization(this.world);
-    this.accumulator += dt * this.timeScale;
+    tickDynamite(this.world, scaledDt, (wx, wy, r, f) => this.explodeAt(wx, wy, r, f));
+    tickCannons(this.world, this.renderer, (wx, wy, r, f) => this.explodeAt(wx, wy, r, f), scaledDt);
+    this.accumulator += scaledDt;
     while (this.accumulator >= TIMESTEP) {
       this.world.step(TIMESTEP, this.velocityIterations, this.positionIterations);
       this.accumulator -= TIMESTEP;

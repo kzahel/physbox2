@@ -2,7 +2,7 @@ import type * as planck from "planck";
 import type { Game } from "../engine/Game";
 import { findClosestBody } from "../engine/Physics";
 import { RagdollController } from "./RagdollController";
-import type { ToolContext, ToolHandler } from "./ToolHandler";
+import type { Tool, ToolContext, ToolHandler, ToolRenderInfo } from "./ToolHandler";
 import { AttachTool } from "./tools/AttachTool";
 import { AttractTool } from "./tools/AttractTool";
 import { CreationTool } from "./tools/CreationTool";
@@ -16,40 +16,12 @@ import { RopeTool, SpringTool } from "./tools/RopeTool";
 import { ScaleTool } from "./tools/ScaleTool";
 import { SelectTool } from "./tools/SelectTool";
 
-// Re-export constants and helpers that Renderer needs
+// Re-export Tool type and constants/helpers that other modules need
+export type { Tool, ToolRenderInfo } from "./ToolHandler";
 export { ERASE_RADIUS_PX } from "./tools/EraseTool";
 export { GLUE_RADIUS_PX } from "./tools/GlueTool";
 export { GRAB_RADIUS_PX } from "./tools/GrabTool";
 export { hasMotor, isDirectional } from "./tools/SelectTool";
-
-export type Tool =
-  | "box"
-  | "ball"
-  | "platform"
-  | "car"
-  | "springball"
-  | "launcher"
-  | "conveyor"
-  | "dynamite"
-  | "ropetool"
-  | "spring"
-  | "grab"
-  | "erase"
-  | "attach"
-  | "detach"
-  | "attract"
-  | "select"
-  | "seesaw"
-  | "rocket"
-  | "scale"
-  | "balloon"
-  | "fan"
-  | "ragdoll"
-  | "cannon"
-  | "glue"
-  | "unglue"
-  | "train"
-  | "draw";
 
 const CREATION_TOOL_IDS: Tool[] = [
   "box",
@@ -64,7 +36,7 @@ const CREATION_TOOL_IDS: Tool[] = [
   "train",
 ];
 
-export class InputManager {
+export class InputManager implements ToolRenderInfo {
   tool: Tool = "grab";
 
   // Multi-placement mode
@@ -220,6 +192,10 @@ export class InputManager {
     return pt?.platformDraw ?? null;
   }
 
+  get drawPoints(): readonly { x: number; y: number }[] {
+    return this.drawTool.drawPoints;
+  }
+
   // ── Public methods ──
 
   setTool(tool: Tool) {
@@ -350,24 +326,10 @@ export class InputManager {
     if (e.touches.length === 1) {
       const t = e.touches[0];
       this.toolCursor = { x: t.clientX, y: t.clientY };
-      const h = this.handler;
 
-      // Tools that need immediate touch-start action
-      if (this.tool === "grab") {
+      if (this.handler.immediateTouch) {
         const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.container);
-        h.onDown?.(world.x, world.y, t.clientX, t.clientY);
-        this.touchToolFired = true;
-      } else if (this.tool === "scale") {
-        const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.container);
-        h.onDown?.(world.x, world.y, t.clientX, t.clientY);
-        this.touchToolFired = true;
-      } else if (this.isPlatformDrawTool() || this.tool === "draw") {
-        const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.container);
-        h.onDown?.(world.x, world.y, t.clientX, t.clientY);
-        this.touchToolFired = true;
-      } else if (this.isBrushTool()) {
-        const world = this.game.camera.toWorld(t.clientX, t.clientY, this.game.container);
-        h.onDown?.(world.x, world.y, t.clientX, t.clientY);
+        this.handler.onDown?.(world.x, world.y, t.clientX, t.clientY);
         this.touchToolFired = true;
       }
     }
@@ -380,12 +342,8 @@ export class InputManager {
     if (cur.length >= 2 && this.lastTouches.length >= 2) {
       // Two-finger gesture — cancel tool, do pan+zoom
       this.touchToolFired = true;
-      this.grabTool.releaseGrab();
-      this.scaleTool.scaleDrag = null;
+      this.handler.reset?.();
       this.stopMultiPlace();
-      const pt = this.platformTools.get(this.tool);
-      if (pt) pt.platformDraw = null;
-      this.drawTool.reset();
 
       const prevA = this.lastTouches[0];
       const prevB = this.lastTouches[1];
@@ -412,17 +370,16 @@ export class InputManager {
       const dy = t.y - prev.y;
 
       const h = this.handler;
+      const dragMode = h.touchDragMode;
 
-      if (this.tool === "grab" || this.tool === "scale") {
+      if (dragMode === "drag") {
         h.onMove?.(world.x, world.y, dx, dy, t.x, t.y);
-      } else if (this.isBrushTool()) {
+      } else if (dragMode === "brush") {
         h.onBrush?.(world.x, world.y, t.x, t.y);
         this.touchToolFired = true;
-      } else if (this.isPlatformDrawTool() || this.tool === "draw") {
-        h.onMove?.(world.x, world.y, dx, dy, t.x, t.y);
       } else if (this.multiPlaceInterval) {
         this.lastMouse = { x: t.x, y: t.y };
-      } else if (this.multiPlace && this.handler.isCreationTool) {
+      } else if (this.multiPlace && h.isCreationTool) {
         h.onDown?.(world.x, world.y, t.x, t.y);
         this.lastMouse = { x: t.x, y: t.y };
         this.startMultiPlace();
@@ -470,14 +427,6 @@ export class InputManager {
   }
 
   // ── Helpers ──
-
-  private isBrushTool(): boolean {
-    return this.tool === "erase" || this.tool === "glue" || this.tool === "unglue";
-  }
-
-  private isPlatformDrawTool(): boolean {
-    return this.platformTools.has(this.tool);
-  }
 
   private findBodyAt(wx: number, wy: number, radiusPx = 10): planck.Body | null {
     const radius = radiusPx / this.game.camera.zoom;

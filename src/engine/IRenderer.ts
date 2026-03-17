@@ -1,5 +1,5 @@
 import type * as planck from "planck";
-import type { InputManager } from "../interaction/InputManager";
+import type { ToolRenderInfo } from "../interaction/ToolHandler";
 import type { Camera } from "./Camera";
 
 export interface IParticleSystem {
@@ -14,7 +14,7 @@ export interface IRenderer {
   readonly particles: IParticleSystem;
   resize(): void;
   drawWorld(world: planck.World, camera: Camera): void;
-  setInputManager(input: InputManager): void;
+  setInputManager(input: ToolRenderInfo): void;
   /** Clean up resources (WebGL context, DOM elements, etc.) */
   dispose(): void;
 }

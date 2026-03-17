@@ -8,6 +8,8 @@ import type { ToolContext, ToolHandler } from "../ToolHandler";
  * screen-to-world AABB query boilerplate.
  */
 export abstract class BrushTool implements ToolHandler {
+  immediateTouch = true as const;
+  touchDragMode = "brush" as const;
   protected ctx: ToolContext;
 
   constructor(ctx: ToolContext) {

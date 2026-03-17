@@ -1,8 +1,9 @@
-import type { Tool } from "../InputManager";
-import type { ToolContext, ToolHandler } from "../ToolHandler";
+import type { Tool, ToolContext, ToolHandler } from "../ToolHandler";
 
 /** Shared handler for tools that use a drag-to-draw gesture: platform, conveyor, fan, cannon, rocket */
 export class PlatformDrawTool implements ToolHandler {
+  immediateTouch = true as const;
+  touchDragMode = "drag" as const;
   /** Visible to Renderer for preview line */
   platformDraw: { start: { x: number; y: number }; end: { x: number; y: number } } | null = null;
   private ctx: ToolContext;

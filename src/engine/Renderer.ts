@@ -1,13 +1,6 @@
 import type * as planck from "planck";
-import {
-  ERASE_RADIUS_PX,
-  GLUE_RADIUS_PX,
-  GRAB_RADIUS_PX,
-  hasMotor,
-  type InputManager,
-  isDirectional,
-  type Tool,
-} from "../interaction/InputManager";
+import { ERASE_RADIUS_PX, GLUE_RADIUS_PX, GRAB_RADIUS_PX, hasMotor, isDirectional } from "../interaction/InputManager";
+import type { Tool, ToolRenderInfo } from "../interaction/ToolHandler";
 import type { FixtureStyle } from "./BodyUserData";
 import { getBodyUserData } from "./BodyUserData";
 import type { Camera } from "./Camera";
@@ -177,31 +170,31 @@ export class Renderer implements IRenderer {
 
   private drawToolOverlays(camera: Camera) {
     // Tool cursor
-    if (this.inputManager?.toolCursor) {
-      const tool = this.inputManager.tool;
-      const pos = this.inputManager.toolCursor;
-      if (tool !== "scale" || !this.inputManager?.scaleDrag) {
+    if (this.toolInfo?.toolCursor) {
+      const tool = this.toolInfo.tool;
+      const pos = this.toolInfo.toolCursor;
+      if (tool !== "scale" || !this.toolInfo?.scaleDrag) {
         const style = TOOL_CURSORS[tool];
         if (style) this.drawToolCursor(pos, style.radius, style.stroke, style.fill);
       }
     }
 
     // Platform/conveyor/fan preview
-    if (this.inputManager?.platformDraw) {
+    if (this.toolInfo?.platformDraw) {
       this.drawPlatformPreview(camera);
     }
 
     // Polygon draw preview
-    if (this.inputManager?.tool === "draw") {
-      const pts = this.inputManager.drawTool.drawPoints;
+    if (this.toolInfo?.tool === "draw") {
+      const pts = this.toolInfo.drawPoints;
       if (pts.length >= 1) {
         this.drawDrawPreview(pts, camera);
       }
     }
 
     // Rope pending highlight
-    if (this.inputManager?.ropePending) {
-      const rp = this.inputManager.ropePending;
+    if (this.toolInfo?.ropePending) {
+      const rp = this.toolInfo.ropePending;
       const sp = rp.body
         ? camera.toScreen(rp.body.getPosition().x, rp.body.getPosition().y, this.canvas)
         : camera.toScreen(rp.x, rp.y, this.canvas);
@@ -209,16 +202,16 @@ export class Renderer implements IRenderer {
     }
 
     // Attach pending highlight
-    if (this.inputManager?.attachPending) {
-      const body = this.inputManager.attachPending.body;
+    if (this.toolInfo?.attachPending) {
+      const body = this.toolInfo.attachPending.body;
       const bpos = body.getPosition();
       const sp = camera.toScreen(bpos.x, bpos.y, this.canvas);
       this.drawToolCursor(sp, 16, "rgba(255, 200, 50, 0.9)", "rgba(255, 200, 50, 0.15)");
     }
 
     // Scale preview
-    if (this.inputManager?.scaleDrag) {
-      const sd = this.inputManager.scaleDrag;
+    if (this.toolInfo?.scaleDrag) {
+      const sd = this.toolInfo.scaleDrag;
       const bpos = sd.body.getPosition();
       const sp = camera.toScreen(bpos.x, bpos.y, this.canvas);
       const ringSize = 20 * sd.currentScale;
@@ -234,8 +227,8 @@ export class Renderer implements IRenderer {
   }
 
   private drawPlatformPreview(camera: Camera) {
-    const tool = this.inputManager!.tool;
-    const { start, end } = this.inputManager!.platformDraw!;
+    const tool = this.toolInfo!.tool;
+    const { start, end } = this.toolInfo!.platformDraw!;
     const s = camera.toScreen(start.x, start.y, this.canvas);
     const e = camera.toScreen(end.x, end.y, this.canvas);
     const color = PLATFORM_PREVIEW_COLORS[tool] ?? "rgba(80, 100, 80, 0.9)";
@@ -280,8 +273,8 @@ export class Renderer implements IRenderer {
   }
 
   private drawSelectionUI(camera: Camera) {
-    if (!this.inputManager?.selectedBody) return;
-    const body = this.inputManager.selectedBody;
+    if (!this.toolInfo?.selectedBody) return;
+    const body = this.toolInfo.selectedBody;
     const bpos = body.getPosition();
     const sp = camera.toScreen(bpos.x, bpos.y, this.canvas);
     // Selection highlight ring
@@ -298,11 +291,11 @@ export class Renderer implements IRenderer {
     this.drawMotorButton(sp, nextBtnY, hasMotor(body));
   }
 
-  setInputManager(input: InputManager) {
-    this.inputManager = input;
+  setInputManager(input: ToolRenderInfo) {
+    this.toolInfo = input;
   }
 
-  private inputManager: InputManager | null = null;
+  private toolInfo: ToolRenderInfo | null = null;
 
   private drawParticles(camera: Camera) {
     const ctx = this.ctx;
@@ -541,13 +534,11 @@ export class Renderer implements IRenderer {
   }
 
   private drawDynamiteEffects(world: planck.World, camera: Camera) {
-    const now = performance.now();
     for (let body = world.getBodyList(); body; body = body.getNext()) {
       const ud = getBodyUserData(body);
-      if (ud?.label !== "dynamite" || !ud.fuseStart || !ud.fuseDuration) continue;
+      if (ud?.label !== "dynamite" || ud.fuseRemaining == null || !ud.fuseDuration) continue;
 
-      const elapsed = (now - ud.fuseStart) / 1000;
-      const remaining = Math.max(0, 1 - elapsed / ud.fuseDuration);
+      const remaining = Math.max(0, ud.fuseRemaining / ud.fuseDuration);
 
       const pos = body.getPosition();
       const angle = body.getAngle();
@@ -666,7 +657,7 @@ export class Renderer implements IRenderer {
     this.ctx.restore();
   }
 
-  private drawDrawPreview(pts: { x: number; y: number }[], camera: Camera) {
+  private drawDrawPreview(pts: readonly { x: number; y: number }[], camera: Camera) {
     const ctx = this.ctx;
     const screenPts = pts.map((p) => camera.toScreen(p.x, p.y, this.canvas));
 
@@ -716,7 +707,7 @@ export class Renderer implements IRenderer {
     ctx.restore();
   }
 
-  private computeHullPreview(pts: { x: number; y: number }[]): { x: number; y: number }[] {
+  private computeHullPreview(pts: readonly { x: number; y: number }[]): { x: number; y: number }[] {
     const sorted = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y);
     const cross = (o: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) =>
       (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);

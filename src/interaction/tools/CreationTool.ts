@@ -1,5 +1,4 @@
-import type { Tool } from "../InputManager";
-import type { ToolContext, ToolHandler } from "../ToolHandler";
+import type { Tool, ToolContext, ToolHandler } from "../ToolHandler";
 
 /** Simple one-click placement tools (box, ball, rope, car, etc.) */
 export class CreationTool implements ToolHandler {

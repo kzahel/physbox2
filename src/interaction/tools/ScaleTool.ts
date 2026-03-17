@@ -2,6 +2,8 @@ import type * as planck from "planck";
 import type { ToolContext, ToolHandler } from "../ToolHandler";
 
 export class ScaleTool implements ToolHandler {
+  immediateTouch = true as const;
+  touchDragMode = "drag" as const;
   /** Visible to Renderer for preview ring */
   scaleDrag: { body: planck.Body; startScreenY: number; currentScale: number } | null = null;
   private ctx: ToolContext;

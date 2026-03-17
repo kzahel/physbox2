@@ -2,6 +2,8 @@ import { createPolygon } from "../../prefabs/Polygon";
 import type { ToolContext, ToolHandler } from "../ToolHandler";
 
 export class DrawTool implements ToolHandler {
+  immediateTouch = true as const;
+  touchDragMode = "drag" as const;
   /** Points collected while drawing — visible to Renderer for preview */
   drawPoints: { x: number; y: number }[] = [];
   private drawing = false;

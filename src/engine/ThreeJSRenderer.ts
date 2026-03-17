@@ -1,14 +1,7 @@
 import type * as planck from "planck";
 import * as THREE from "three";
-import {
-  ERASE_RADIUS_PX,
-  GLUE_RADIUS_PX,
-  GRAB_RADIUS_PX,
-  hasMotor,
-  type InputManager,
-  isDirectional,
-  type Tool,
-} from "../interaction/InputManager";
+import { ERASE_RADIUS_PX, GLUE_RADIUS_PX, GRAB_RADIUS_PX, hasMotor, isDirectional } from "../interaction/InputManager";
+import type { Tool, ToolRenderInfo } from "../interaction/ToolHandler";
 import type { FixtureStyle } from "./BodyUserData";
 import { getBodyUserData } from "./BodyUserData";
 import type { Camera } from "./Camera";
@@ -195,7 +188,7 @@ export class ThreeJSRenderer implements IRenderer {
   private scene: THREE.Scene;
   private camera3d: THREE.OrthographicCamera;
   private glRenderer: THREE.WebGLRenderer;
-  private inputManager: InputManager | null = null;
+  private toolInfo: ToolRenderInfo | null = null;
 
   // Debug bounding sphere wireframes
   private debugMeshes: THREE.LineSegments[] = [];
@@ -360,8 +353,8 @@ export class ThreeJSRenderer implements IRenderer {
     this.overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  setInputManager(input: InputManager) {
-    this.inputManager = input;
+  setInputManager(input: ToolRenderInfo) {
+    this.toolInfo = input;
   }
 
   drawWorld(world: planck.World, camera: Camera) {
@@ -731,23 +724,23 @@ export class ThreeJSRenderer implements IRenderer {
     this.drawBalloonStrings(world, camera);
 
     // Tool cursor
-    if (this.inputManager?.toolCursor) {
-      const tool = this.inputManager.tool;
-      const pos = this.inputManager.toolCursor;
-      if (tool !== "scale" || !this.inputManager?.scaleDrag) {
+    if (this.toolInfo?.toolCursor) {
+      const tool = this.toolInfo.tool;
+      const pos = this.toolInfo.toolCursor;
+      if (tool !== "scale" || !this.toolInfo?.scaleDrag) {
         const style = TOOL_CURSORS[tool];
         if (style) this.drawToolCursor(pos, style.radius, style.stroke, style.fill);
       }
     }
 
     // Platform draw preview
-    if (this.inputManager?.platformDraw) {
-      const tool = this.inputManager.tool;
+    if (this.toolInfo?.platformDraw) {
+      const tool = this.toolInfo.tool;
       const isFan = tool === "fan";
       const isCannon = tool === "cannon";
       const isRocket = tool === "rocket";
       const isConveyor = tool === "conveyor";
-      const { start, end } = this.inputManager.platformDraw;
+      const { start, end } = this.toolInfo.platformDraw;
       const s = camera.toScreen(start.x, start.y, this.glCanvas);
       const e = camera.toScreen(end.x, end.y, this.glCanvas);
       ctx.save();
@@ -797,8 +790,8 @@ export class ThreeJSRenderer implements IRenderer {
     }
 
     // Rope pending
-    if (this.inputManager?.ropePending) {
-      const rp = this.inputManager.ropePending;
+    if (this.toolInfo?.ropePending) {
+      const rp = this.toolInfo.ropePending;
       const sp = rp.body
         ? camera.toScreen(rp.body.getPosition().x, rp.body.getPosition().y, this.glCanvas)
         : camera.toScreen(rp.x, rp.y, this.glCanvas);
@@ -806,16 +799,16 @@ export class ThreeJSRenderer implements IRenderer {
     }
 
     // Attach pending
-    if (this.inputManager?.attachPending) {
-      const body = this.inputManager.attachPending.body;
+    if (this.toolInfo?.attachPending) {
+      const body = this.toolInfo.attachPending.body;
       const bpos = body.getPosition();
       const sp = camera.toScreen(bpos.x, bpos.y, this.glCanvas);
       this.drawToolCursor(sp, 16, "rgba(255, 200, 50, 0.9)", "rgba(255, 200, 50, 0.15)");
     }
 
     // Scale preview
-    if (this.inputManager?.scaleDrag) {
-      const sd = this.inputManager.scaleDrag;
+    if (this.toolInfo?.scaleDrag) {
+      const sd = this.toolInfo.scaleDrag;
       const bpos = sd.body.getPosition();
       const sp = camera.toScreen(bpos.x, bpos.y, this.glCanvas);
       const ringSize = 20 * sd.currentScale;
@@ -828,8 +821,8 @@ export class ThreeJSRenderer implements IRenderer {
     }
 
     // Select tool UI
-    if (this.inputManager?.selectedBody) {
-      const body = this.inputManager.selectedBody;
+    if (this.toolInfo?.selectedBody) {
+      const body = this.toolInfo.selectedBody;
       const bpos = body.getPosition();
       const sp = camera.toScreen(bpos.x, bpos.y, this.glCanvas);
       this.drawToolCursor(sp, 20, "rgba(100, 200, 255, 0.8)", "rgba(100, 200, 255, 0.08)");
@@ -978,15 +971,13 @@ export class ThreeJSRenderer implements IRenderer {
   }
 
   private drawDynamiteEffects(world: planck.World, camera: Camera) {
-    const now = performance.now();
     const ctx = this.overlayCtx;
 
     for (let body = world.getBodyList(); body; body = body.getNext()) {
       const ud = getBodyUserData(body);
-      if (ud?.label !== "dynamite" || !ud.fuseStart || !ud.fuseDuration) continue;
+      if (ud?.label !== "dynamite" || ud.fuseRemaining == null || !ud.fuseDuration) continue;
 
-      const elapsed = (now - ud.fuseStart) / 1000;
-      const remaining = Math.max(0, 1 - elapsed / ud.fuseDuration);
+      const remaining = Math.max(0, ud.fuseRemaining / ud.fuseDuration);
 
       const pos = body.getPosition();
       const angle = body.getAngle();
