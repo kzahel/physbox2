@@ -656,50 +656,53 @@ export class Renderer implements IRenderer {
   }
 
   private drawDrawPreview(pts: { x: number; y: number }[], camera: Camera) {
+    const ctx = this.ctx;
     const screenPts = pts.map((p) => camera.toScreen(p.x, p.y, this.canvas));
 
-    this.inScreenSpace(() => {
-      const ctx = this.ctx;
+    ctx.save();
 
-      // Draw start dot even with single point
-      ctx.fillStyle = "rgba(120, 200, 160, 0.8)";
+    // Draw start dot even with single point
+    ctx.fillStyle = "rgba(120, 200, 160, 0.9)";
+    ctx.beginPath();
+    ctx.arc(screenPts[0].x, screenPts[0].y, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Draw the freeform path
+    if (screenPts.length >= 2) {
       ctx.beginPath();
-      ctx.arc(screenPts[0].x, screenPts[0].y, 4, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(screenPts[0].x, screenPts[0].y);
+      for (let i = 1; i < screenPts.length; i++) {
+        ctx.lineTo(screenPts[i].x, screenPts[i].y);
+      }
+      ctx.strokeStyle = "rgba(120, 200, 160, 0.7)";
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    }
 
-      // Draw the freeform path
-      if (screenPts.length >= 2) {
+    // Draw convex hull preview if enough points
+    if (pts.length >= 3) {
+      const hull = this.computeHullPreview(pts);
+      if (hull.length >= 3) {
+        const hullScreen = hull.map((p) => camera.toScreen(p.x, p.y, this.canvas));
         ctx.beginPath();
-        ctx.moveTo(screenPts[0].x, screenPts[0].y);
-        for (let i = 1; i < screenPts.length; i++) {
-          ctx.lineTo(screenPts[i].x, screenPts[i].y);
+        ctx.moveTo(hullScreen[0].x, hullScreen[0].y);
+        for (let i = 1; i < hullScreen.length; i++) {
+          ctx.lineTo(hullScreen[i].x, hullScreen[i].y);
         }
-        ctx.strokeStyle = "rgba(120, 200, 160, 0.6)";
+        ctx.closePath();
+        ctx.fillStyle = "rgba(120, 200, 160, 0.2)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(120, 200, 160, 0.9)";
         ctx.lineWidth = 2;
-        ctx.setLineDash([6, 4]);
+        ctx.setLineDash([8, 6]);
         ctx.stroke();
         ctx.setLineDash([]);
       }
+    }
 
-      // Draw convex hull preview if enough points
-      if (pts.length >= 3) {
-        const hull = this.computeHullPreview(pts);
-        if (hull.length >= 3) {
-          const hullScreen = hull.map((p) => camera.toScreen(p.x, p.y, this.canvas));
-          ctx.beginPath();
-          ctx.moveTo(hullScreen[0].x, hullScreen[0].y);
-          for (let i = 1; i < hullScreen.length; i++) {
-            ctx.lineTo(hullScreen[i].x, hullScreen[i].y);
-          }
-          ctx.closePath();
-          ctx.fillStyle = "rgba(120, 200, 160, 0.15)";
-          ctx.fill();
-          ctx.strokeStyle = "rgba(120, 200, 160, 0.8)";
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-      }
-    });
+    ctx.restore();
   }
 
   private computeHullPreview(pts: { x: number; y: number }[]): { x: number; y: number }[] {
